@@ -1,0 +1,367 @@
+From dd0428a625f39293fe2ca60de3b5ad11369027d7 Mon Sep 17 00:00:00 2001
+From: Abhirams144 <sureshabhiram92@gmail.com>
+Date: Fri, 6 Nov 2026 23:01:01 +0530
+Subject: [PATCH 1/2] cubic: implement rate-limited sender increase
+ (draft-ietf-ccwg-ratelimited-increase-11)
+
+- Reset maxFS (BytesInFlightMax) to zero on every congestion event and
+  re-measure it from the first FlightSize after the reduction (after lost
+  bytes are removed, or after an ECN event).
+- Cap cwnd at 2 * maxFS in slow start and maxFS + 1 SMSS in congestion
+  avoidance (previously 2 * maxFS in both), never below the 2-packet minimum.
+- When the congestion avoidance cap binds below ssthresh, lower ssthresh so
+  the sender stays in congestion avoidance instead of flapping back to slow
+  start.
+- Save and restore maxFS across spurious congestion events.
+- Optional per-event cwnd trace behind -DQUIC_CUBIC_CWND_LOG for experiments.
+- Add RateLimited_* unit tests and update the slow-start overflow test to the
+  new congestion avoidance cap.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/core/cubic.c                | 114 ++++++++++++++++++++++++++++--
+ src/core/cubic.h                |   1 +
+ src/core/unittest/CubicTest.cpp | 120 +++++++++++++++++++++++++++++++-
+ 3 files changed, 228 insertions(+), 7 deletions(-)
+
+diff --git a/src/core/cubic.c b/src/core/cubic.c
+index a3ed2a360..8d5caff37 100644
+--- a/src/core/cubic.c
++++ b/src/core/cubic.c
+@@ -16,6 +16,42 @@ Abstract:
+ 
+ #include "cubic.h"
+ 
++#ifdef QUIC_CUBIC_CWND_LOG
++//
++// Experiment-only cwnd trace (build with -DQUIC_CUBIC_CWND_LOG). Path comes
++// from the CWND_LOG env var so client and server don't share a file.
++// Columns: event (S=sent, A=ack, L=loss), time_us, cwnd, maxFS,
++// bytes_in_flight, ssthresh, bytes (sent, acked or lost by this event).
++//
++#include <stdio.h>
++#include <stdlib.h>
++static
++void
++CubicCwndLog(
++    _In_ char Event,
++    _In_ const QUIC_CONGESTION_CONTROL_CUBIC* Cubic,
++    _In_ uint32_t Bytes
++    )
++{
++    static FILE* LogFile = NULL;
++    if (LogFile == NULL) {
++        const char* Path = getenv("CWND_LOG");
++        LogFile = fopen(Path != NULL ? Path : "/tmp/cwnd_log.csv", "w");
++        if (LogFile == NULL) {
++            return;
++        }
++    }
++    fprintf(
++        LogFile, "%c,%llu,%u,%u,%u,%u,%u\n", Event,
++        (unsigned long long)CxPlatTimeUs64(), Cubic->CongestionWindow,
++        Cubic->BytesInFlightMax, Cubic->BytesInFlight, Cubic->SlowStartThreshold, Bytes);
++    fflush(LogFile);
++}
++#define CUBIC_CWND_LOG(Event, Cubic, Bytes) CubicCwndLog(Event, Cubic, Bytes)
++#else
++#define CUBIC_CWND_LOG(Event, Cubic, Bytes)
++#endif
++
+ //
+ // BETA and C from RFC8312. 10x multiples for integer arithmetic.
+ //
+@@ -302,8 +338,19 @@ CubicCongestionControlOnCongestionEvent(
+         Cubic->PrevSlowStartThreshold = Cubic->SlowStartThreshold;
+         Cubic->PrevCongestionWindow = Cubic->CongestionWindow;
+         Cubic->PrevAimdWindow = Cubic->AimdWindow;
++        Cubic->PrevBytesInFlightMax = Cubic->BytesInFlightMax;
+     }
+ 
++    //
++    // Rate-limited sender increase (Gap 1): every congestion event reduces the
++    // window, and "upon a reduction of cwnd (for any reason), maxFS MUST be
++    // reset to zero" (draft-ietf-ccwg-ratelimited-increase, Section 3). maxFS
++    // is then re-measured from the first FlightSize after the reduction (see
++    // CubicCongestionControlUpdateMaxFlightSize), so a flight size observed
++    // before the congestion event can no longer justify window growth.
++    //
++    Cubic->BytesInFlightMax = 0;
++
+     if (IsPersistentCongestion && !Cubic->IsInPersistentCongestion) {
+ 
+         CXPLAT_DBG_ASSERT(!Cubic->IsInPersistentCongestion);
+@@ -367,6 +414,20 @@ CubicCongestionControlOnCongestionEvent(
+     }
+ }
+ 
++//
++// Re-measures maxFS from the current FlightSize: maxFS = max(FlightSize, maxFS).
++//
++static
++void
++CubicCongestionControlUpdateMaxFlightSize(
++    _In_ QUIC_CONGESTION_CONTROL_CUBIC* Cubic
++    )
++{
++    if (Cubic->BytesInFlightMax < Cubic->BytesInFlight) {
++        Cubic->BytesInFlightMax = Cubic->BytesInFlight;
++    }
++}
++
+ _IRQL_requires_max_(PASSIVE_LEVEL)
+ void
+ CubicCongestionControlOnDataSent(
+@@ -383,6 +444,7 @@ CubicCongestionControlOnDataSent(
+         Cubic->BytesInFlightMax = Cubic->BytesInFlight;
+         QuicSendBufferConnectionAdjust(QuicCongestionControlGetConnection(Cc));
+     }
++    CUBIC_CWND_LOG('S', Cubic, NumRetransmittableBytes);
+ 
+     if (NumRetransmittableBytes > Cubic->LastSendAllowance) {
+         Cubic->LastSendAllowance = 0;
+@@ -672,16 +734,43 @@ CubicCongestionControlOnDataAcknowledged(
+ 
+     //
+     // Limit the growth of the window based on the number of bytes we
+-    // actually manage to put on the wire, which may be limited by flow
++    // actually manage to put on the wire (maxFS), which may be limited by flow
+     // control or by the app posting a limited number of bytes. This must
+     // be done to prevent the window from growing without loss feedback from
+     // the network.
+     //
+-    // Using 2 * BytesInFlightMax for the limit allows for exponential growth
+-    // in the window when not otherwise limited.
++    // Rate-limited sender (Gap 2): the limit depends on the phase.
++    //   Slow start:            cwnd <= 2 * maxFS (allows exponential growth).
++    //   Congestion avoidance:  cwnd <= maxFS + 1 SMSS.
++    // The limit is never allowed below the minimum window.
+     //
+-    if (Cubic->CongestionWindow > 2 * Cubic->BytesInFlightMax) {
+-        Cubic->CongestionWindow = 2 * Cubic->BytesInFlightMax;
++    {
++        const uint32_t Smss =
++            QuicPathGetDatagramPayloadSize(&Connection->Paths[0]);
++        const BOOLEAN InSlowStart =
++            Cubic->CongestionWindow < Cubic->SlowStartThreshold;
++        uint32_t CwndLimit;
++        if (InSlowStart) {
++            CwndLimit = 2 * Cubic->BytesInFlightMax;
++        } else {
++            CwndLimit = Cubic->BytesInFlightMax + Smss;
++        }
++        const uint32_t MinWindow = Smss * QUIC_PERSISTENT_CONGESTION_WINDOW_PACKETS;
++        if (CwndLimit < MinWindow) {
++            CwndLimit = MinWindow;
++        }
++        if (Cubic->CongestionWindow > CwndLimit) {
++            Cubic->CongestionWindow = CwndLimit;
++            if (!InSlowStart && Cubic->SlowStartThreshold > Cubic->CongestionWindow) {
++                //
++                // The cap is not a congestion signal: keep the sender in
++                // congestion avoidance. Otherwise a capped cwnd below ssthresh
++                // would re-enter slow start on the next ACK and grow by the
++                // looser 2 * maxFS limit until it hits ssthresh again.
++                //
++                Cubic->SlowStartThreshold = Cubic->CongestionWindow;
++            }
++        }
+     }
+ 
+ Exit:
+@@ -689,6 +778,8 @@ Exit:
+     Cubic->TimeOfLastAck = TimeNowUs;
+     Cubic->TimeOfLastAckValid = TRUE;
+ 
++    CUBIC_CWND_LOG('A', Cubic, AckEvent->NumRetransmittableBytes);
++
+     if (Connection->Settings.NetStatsEventEnabled) {
+         const QUIC_PATH* Path = &Connection->Paths[0];
+         QUIC_CONNECTION_EVENT Event;
+@@ -747,6 +838,13 @@ CubicCongestionControlOnDataLost(
+     CXPLAT_DBG_ASSERT(Cubic->BytesInFlight >= LossEvent->NumRetransmittableBytes);
+     Cubic->BytesInFlight -= LossEvent->NumRetransmittableBytes;
+ 
++    //
++    // First FlightSize measurement after a possible cwnd reduction (the lost
++    // bytes are no longer in flight).
++    //
++    CubicCongestionControlUpdateMaxFlightSize(Cubic);
++    CUBIC_CWND_LOG('L', Cubic, LossEvent->NumRetransmittableBytes);
++
+     CubicCongestionControlUpdateBlockedState(Cc, PreviousCanSendState);
+     QuicConnLogCubic(QuicCongestionControlGetConnection(Cc));
+ }
+@@ -777,6 +875,11 @@ CubicCongestionControlOnEcn(
+             FALSE,
+             TRUE);
+         CubicCongestionHyStartChangeState(Cc, HYSTART_DONE);
++
++        //
++        // First FlightSize measurement after the cwnd reduction.
++        //
++        CubicCongestionControlUpdateMaxFlightSize(Cubic);
+     }
+ 
+     CubicCongestionControlUpdateBlockedState(Cc, PreviousCanSendState);
+@@ -813,6 +916,7 @@ CubicCongestionControlOnSpuriousCongestionEvent(
+     Cubic->SlowStartThreshold = Cubic->PrevSlowStartThreshold;
+     Cubic->CongestionWindow = Cubic->PrevCongestionWindow;
+     Cubic->AimdWindow = Cubic->PrevAimdWindow;
++    Cubic->BytesInFlightMax = Cubic->PrevBytesInFlightMax;
+ 
+     Cubic->IsInRecovery = FALSE;
+     Cubic->HasHadCongestionEvent = FALSE;
+diff --git a/src/core/cubic.h b/src/core/cubic.h
+index cc660a692..0608b6c15 100644
+--- a/src/core/cubic.h
++++ b/src/core/cubic.h
+@@ -70,6 +70,7 @@ typedef struct QUIC_CONGESTION_CONTROL_CUBIC {
+     //
+     uint32_t BytesInFlight;
+     uint32_t BytesInFlightMax;
++    uint32_t PrevBytesInFlightMax;  // Saved for spurious congestion revert
+ 
+     //
+     // The leftover send allowance from a previous send. Only used when pacing.
+diff --git a/src/core/unittest/CubicTest.cpp b/src/core/unittest/CubicTest.cpp
+index 33924098c..fe85d90bc 100644
+--- a/src/core/unittest/CubicTest.cpp
++++ b/src/core/unittest/CubicTest.cpp
+@@ -566,6 +566,117 @@ TEST_F(CubicTest, SlowStart_BytesInFlightMaxClamp)
+     ASSERT_LT(Cubic->CongestionWindow, InitialWindow + 1200);
+ }
+ 
++//
++// Rate-limited sender increase (draft-ietf-ccwg-ratelimited-increase-11,
++// Section 3) conformance tests.
++//
++
++//
++// Test: maxFS is reset on a loss-triggered cwnd reduction
++// Scenario: A full window (12320 bytes) is in flight, so maxFS = 12320. A loss
++// of 2400 bytes reduces cwnd. maxFS must be reset and re-measured from the
++// first FlightSize after the reduction: 12320 - 2400 = 9920. Stock MsQuic kept
++// the stale 12320.
++//
++TEST_F(CubicTest, RateLimited_MaxFsResetOnLoss)
++{
++    InitializeDefaultWithRtt(/*WindowPackets = */ 10, /*HyStart = */ false);
++    const uint32_t InitialWindow = Cubic->CongestionWindow; // 12320
++
++    CC->QuicCongestionControlOnDataSent(CC, InitialWindow);
++    ASSERT_EQ(Cubic->BytesInFlightMax, InitialWindow);
++
++    Connection.Send.NextPacketNumber = 10;
++    QUIC_LOSS_EVENT LossEvent = MakeLossEvent(2400, 5, 10);
++    CC->QuicCongestionControlOnDataLost(CC, &LossEvent);
++
++    ASSERT_LT(Cubic->CongestionWindow, InitialWindow);
++    ASSERT_EQ(Cubic->BytesInFlight, InitialWindow - 2400);
++    ASSERT_EQ(Cubic->BytesInFlightMax, InitialWindow - 2400);
++}
++
++//
++// Test: maxFS is reset on an ECN-triggered cwnd reduction
++// Scenario: maxFS = 12320 from an earlier full flight, but only 6320 bytes are
++// in flight when ECN-CE arrives. After the reduction maxFS = 6320.
++//
++TEST_F(CubicTest, RateLimited_MaxFsResetOnEcn)
++{
++    InitializeDefaultWithRtt(/*WindowPackets = */ 10, /*HyStart = */ false);
++    const uint32_t InitialWindow = Cubic->CongestionWindow; // 12320
++
++    CC->QuicCongestionControlOnDataSent(CC, InitialWindow);
++    Connection.Send.NextPacketNumber = 10;
++    QUIC_ACK_EVENT AckEvent = MakeAckEvent(1050000, 4, 10, 6000);
++    CC->QuicCongestionControlOnDataAcknowledged(CC, &AckEvent);
++    ASSERT_EQ(Cubic->BytesInFlightMax, InitialWindow);
++
++    QUIC_ECN_EVENT EcnEvent{};
++    EcnEvent.LargestPacketNumberAcked = 4;
++    EcnEvent.LargestSentPacketNumber = 10;
++    CC->QuicCongestionControlOnEcn(CC, &EcnEvent);
++
++    ASSERT_EQ(Cubic->BytesInFlight, InitialWindow - 6000);
++    ASSERT_EQ(Cubic->BytesInFlightMax, InitialWindow - 6000);
++}
++
++//
++// Test: a spurious congestion event restores maxFS
++//
++TEST_F(CubicTest, RateLimited_SpuriousCongestionRestoresMaxFs)
++{
++    InitializeDefaultWithRtt(/*WindowPackets = */ 10, /*HyStart = */ false);
++    const uint32_t InitialWindow = Cubic->CongestionWindow;
++
++    CC->QuicCongestionControlOnDataSent(CC, InitialWindow);
++    Connection.Send.NextPacketNumber = 10;
++    QUIC_LOSS_EVENT LossEvent = MakeLossEvent(2400, 5, 10);
++    CC->QuicCongestionControlOnDataLost(CC, &LossEvent);
++    ASSERT_EQ(Cubic->BytesInFlightMax, InitialWindow - 2400);
++
++    ASSERT_TRUE(CC->QuicCongestionControlOnSpuriousCongestionEvent(CC));
++    ASSERT_EQ(Cubic->CongestionWindow, InitialWindow);
++    ASSERT_EQ(Cubic->BytesInFlightMax, InitialWindow);
++}
++
++//
++// Test: congestion avoidance cap is maxFS + 1 SMSS for a rate-limited sender
++// Scenario: In congestion avoidance the app keeps only 1-2 packets in flight
++// while ACKs keep arriving for 3 seconds. CUBIC would grow cwnd well past
++// maxFS; the draft caps it at maxFS + SMSS (stock MsQuic allowed 2 * maxFS).
++// The sender also stays in congestion avoidance.
++//
++TEST_F(CubicTest, RateLimited_CongestionAvoidanceCapIsMaxFsPlusSmss)
++{
++    InitializeDefaultWithRtt(/*WindowPackets = */ 10, /*HyStart = */ false);
++    const uint32_t Smss = 1280 - kIPv6UdpOverhead; // 1232
++    EnterCongestionAvoidance();
++    ASSERT_FALSE(Cubic->IsInRecovery);
++
++    // Drain the flight so the sender is clearly rate-limited.
++    QUIC_ACK_EVENT Drain = MakeAckEvent(1100000, 14, 20, Cubic->BytesInFlight);
++    CC->QuicCongestionControlOnDataAcknowledged(CC, &Drain);
++    ASSERT_EQ(Cubic->BytesInFlight, 0u);
++
++    const uint32_t MaxFs = Cubic->SlowStartThreshold;
++    Cubic->BytesInFlightMax = MaxFs;
++
++    uint64_t PacketNumber = 20;
++    for (uint32_t i = 0; i < 30; i++) {
++        Connection.Send.NextPacketNumber = PacketNumber + 1;
++        CC->QuicCongestionControlOnDataSent(CC, Smss);
++        QUIC_ACK_EVENT AckEvent =
++            MakeAckEvent(1200000 + i * 100000, PacketNumber, PacketNumber + 1, Smss);
++        CC->QuicCongestionControlOnDataAcknowledged(CC, &AckEvent);
++        PacketNumber++;
++    }
++
++    ASSERT_EQ(Cubic->BytesInFlightMax, MaxFs);
++    ASSERT_EQ(Cubic->CongestionWindow, MaxFs + Smss);
++    ASSERT_LT(Cubic->CongestionWindow, 2 * MaxFs);
++    ASSERT_GE(Cubic->CongestionWindow, Cubic->SlowStartThreshold);
++}
++
+ //
+ // Test: Congestion Avoidance AIMD vs CUBIC Window Selection
+ // Scenario: After loss triggers recovery and an ACK exits recovery, a subsequent
+@@ -2058,8 +2169,13 @@ TEST_F(CubicTest, SlowStart_WindowOverflowAfterPersistentCongestion)
+     // 1. TimeOfCongAvoidStart should be set
+     ASSERT_EQ(Cubic->TimeOfCongAvoidStart, LargeAck.TimeNow);
+ 
+-    // 2. Window should be clamped to threshold
+-    ASSERT_EQ(Cubic->CongestionWindow, ThresholdAfterPC);
++    // 2. Window is clamped to the threshold, then (rate-limited sender
++    // increase) to the congestion avoidance cap maxFS + 1 SMSS, because the
++    // sender never had more than maxFS bytes in flight.
++    ASSERT_LE(Cubic->CongestionWindow, ThresholdAfterPC);
++    ASSERT_EQ(Cubic->CongestionWindow, Cubic->BytesInFlightMax + DatagramPayloadLength);
++    // 3. The cap keeps the sender in congestion avoidance.
++    ASSERT_EQ(Cubic->SlowStartThreshold, Cubic->CongestionWindow);
+ }
+ 
+ //
+-- 
+2.43.0
+

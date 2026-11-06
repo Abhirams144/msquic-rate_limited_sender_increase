@@ -1,0 +1,5 @@
+date=2026-11-06T00:39:35+05:30
+kernel=7.0.0-42-generic
+BW=10mbit DELAY=20ms(each way, RTT ~4x) QUEUE=100 packets
+client_args=-client -unsecure -target:10.0.3.1 -prime:3000000 -burst:6000 -pause:10 -cycles:1500 -final:8000000
+reps=5

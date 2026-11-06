@@ -1,0 +1,325 @@
+From 19538311edea77c6d0c6f3d31818fde310f23ac3 Mon Sep 17 00:00:00 2001
+From: Abhirams144 <sureshabhiram92@gmail.com>
+Date: Fri, 6 Nov 2026 23:01:01 +0530
+Subject: [PATCH 2/2] sample: rate-limited sender experiment client
+
+Adds -burst/-pause/-cycles/-prime/-final options so the client can send a
+bulk prime, an application-limited stream and a final resumption burst, prints
+QUIC_STATISTICS_V2 when the transfer completes and closes the connection
+instead of waiting for the idle timeout.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/tools/sample/sample.c | 218 +++++++++++++++++++++++++++++++-------
+ 1 file changed, 181 insertions(+), 37 deletions(-)
+
+diff --git a/src/tools/sample/sample.c b/src/tools/sample/sample.c
+index d13993fe7..1b7ac5607 100644
+--- a/src/tools/sample/sample.c
++++ b/src/tools/sample/sample.c
+@@ -52,6 +52,9 @@ Abstract:
+ #include "msquic.h"
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <pthread.h>
++#include <unistd.h>
++#include <time.h>
+ 
+ #ifndef UNREFERENCED_PARAMETER
+ #define UNREFERENCED_PARAMETER(P) (void)(P)
+@@ -75,15 +78,47 @@ const QUIC_BUFFER Alpn = { sizeof("sample") - 1, (uint8_t*)"sample" };
+ const uint16_t UdpPort = 4567;
+ 
+ //
+-// The default idle timeout period (1 second) used for the protocol.
++// Bumped from 1000ms so deliberate multi-second app-limited pauses don't
++// trigger idle shutdown.
+ //
+-const uint64_t IdleTimeoutMs = 1000;
++const uint64_t IdleTimeoutMs = 60000;
+ 
+ //
+ // The length of buffer sent over the streams in the protocol.
+ //
+ const uint32_t SendBufferLength = 100;
+ 
++//
++// --- Rate-limiting demo controls ---
++//
++uint64_t g_BurstBytes = 60000;
++uint32_t g_PauseMs = 500;
++uint32_t g_Cycles = 8;
++uint64_t g_PrimeBytes = 0;  // if >0, sent once, first, no pause, to force a loss event
++uint64_t g_FinalBytes = 0;  // if >0, one large burst sent right after the last cycle
++HQUIC g_ClientConnection = NULL;
++const uint32_t g_ChunkSize = 4096;
++
++uint64_t
++GetTimestampMs(
++    void
++    )
++{
++    struct timespec ts;
++    clock_gettime(CLOCK_MONOTONIC, &ts);
++    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
++}
++
++uint64_t
++GetTimestampUsAbsolute(
++    void
++    )
++{
++    struct timespec ts;
++    clock_gettime(CLOCK_MONOTONIC, &ts);
++    return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
++}
++
+ //
+ // The QUIC API/function table returned from MsQuicOpen2. It contains all the
+ // functions called by the app to interact with MsQuic.
+@@ -699,7 +734,6 @@ ClientStreamCallback(
+         // returned back to the app.
+         //
+         free(Event->SEND_COMPLETE.ClientContext);
+-        printf("[strm][%p] Data sent\n", Stream);
+         break;
+     case QUIC_STREAM_EVENT_RECEIVE:
+         //
+@@ -728,6 +762,28 @@ ClientStreamCallback(
+         if (!Event->SHUTDOWN_COMPLETE.AppCloseInProgress) {
+             MsQuic->StreamClose(Stream);
+         }
++        //
++        // Experiment run is over: report transport statistics and close the
++        // connection instead of waiting for the idle timeout.
++        //
++        if (g_ClientConnection != NULL) {
++            QUIC_STATISTICS_V2 Stats = {0};
++            uint32_t StatsSize = sizeof(Stats);
++            if (QUIC_SUCCEEDED(MsQuic->GetParam(
++                    g_ClientConnection, QUIC_PARAM_CONN_STATISTICS_V2, &StatsSize, &Stats))) {
++                printf("[stats] sent_pkts=%llu lost_pkts=%llu spurious_lost=%llu "
++                       "congestion_events=%u sent_bytes=%llu min_rtt_us=%u max_rtt_us=%u\n",
++                       (unsigned long long)Stats.SendTotalPackets,
++                       (unsigned long long)Stats.SendSuspectedLostPackets,
++                       (unsigned long long)Stats.SendSpuriousLostPackets,
++                       Stats.SendCongestionCount,
++                       (unsigned long long)Stats.SendTotalBytes,
++                       Stats.MinRtt, Stats.MaxRtt);
++            }
++            printf("[demo] abs_us=%llu  TRANSFER COMPLETE\n",
++                   (unsigned long long)GetTimestampUsAbsolute());
++            MsQuic->ConnectionShutdown(g_ClientConnection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
++        }
+         break;
+     default:
+         break;
+@@ -735,6 +791,108 @@ ClientStreamCallback(
+     return QUIC_STATUS_SUCCESS;
+ }
+ 
++QUIC_STATUS
++SendBurst(
++    _In_ HQUIC Stream,
++    _In_ BOOLEAN IsFinal
++    )
++{
++    uint64_t Remaining = g_BurstBytes;
++    while (Remaining > 0) {
++        uint32_t ThisChunk = (Remaining < g_ChunkSize) ? (uint32_t)Remaining : g_ChunkSize;
++        BOOLEAN IsLastChunk = IsFinal && (Remaining == ThisChunk);
++
++        uint8_t* SendBufferRaw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + ThisChunk);
++        if (SendBufferRaw == NULL) {
++            printf("SendBuffer allocation failed!\n");
++            return QUIC_STATUS_OUT_OF_MEMORY;
++        }
++        QUIC_BUFFER* SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
++        SendBuffer->Buffer = SendBufferRaw + sizeof(QUIC_BUFFER);
++        SendBuffer->Length = ThisChunk;
++
++        QUIC_SEND_FLAGS Flags = IsLastChunk ? QUIC_SEND_FLAG_FIN : QUIC_SEND_FLAG_NONE;
++        QUIC_STATUS Status = MsQuic->StreamSend(Stream, SendBuffer, 1, Flags, SendBuffer);
++        if (QUIC_FAILED(Status)) {
++            printf("StreamSend failed, 0x%x!\n", Status);
++            free(SendBufferRaw);
++            return Status;
++        }
++        Remaining -= ThisChunk;
++    }
++    return QUIC_STATUS_SUCCESS;
++}
++
++//
++// Runs g_Cycles identical (small burst + pause) cycles. Every cycle sends
++// EXACTLY the same number of bytes, so the sender never sends more than it
++// did in the first cycle. Mirrors the worked example in
++// draft-ietf-ccwg-ratelimited-increase: if cwnd ratchets upward cycle after
++// cycle even though bytes-sent-per-cycle never increases, cwnd is growing on
++// stale, unvalidated evidence.
++//
++void*
++RateLimitedSendThread(
++    _In_ void* Context
++    )
++{
++    HQUIC Stream = (HQUIC)Context;
++    uint64_t T0 = GetTimestampMs();
++
++    if (g_PrimeBytes > 0) {
++        printf("[demo] PRIME abs_us=%llu  sending %llu bytes to force a real loss event / CA transition\n",
++               (unsigned long long)GetTimestampUsAbsolute(), (unsigned long long)g_PrimeBytes);
++        uint64_t SavedBurst = g_BurstBytes;
++        g_BurstBytes = g_PrimeBytes;
++        if (QUIC_FAILED(SendBurst(Stream, FALSE))) {
++            return NULL;
++        }
++        g_BurstBytes = SavedBurst;
++        printf("[demo] PRIME QUEUED abs_us=%llu -- pausing briefly before cycles begin\n",
++               (unsigned long long)GetTimestampUsAbsolute());
++        for (uint32_t i = 0; i < g_PauseMs; i++) {
++            usleep(1000);
++        }
++    }
++
++    for (uint32_t Cycle = 1; Cycle <= g_Cycles; Cycle++) {
++        BOOLEAN IsLastCycle = (Cycle == g_Cycles);
++        BOOLEAN IsFinalSend = IsLastCycle && g_FinalBytes == 0;
++
++        printf("[demo] cycle=%u abs_us=%llu  BURST START (%llu bytes)\n",
++               Cycle, (unsigned long long)GetTimestampUsAbsolute(),
++               (unsigned long long)g_BurstBytes);
++
++        if (QUIC_FAILED(SendBurst(Stream, IsFinalSend))) {
++            return NULL;
++        }
++
++        printf("[demo] cycle=%u abs_us=%llu  BURST QUEUED -- app-limited pause (%ums)\n",
++               Cycle, (unsigned long long)GetTimestampUsAbsolute(), g_PauseMs);
++
++        if (!IsLastCycle) {
++            for (uint32_t i = 0; i < g_PauseMs; i++) {
++                usleep(1000);
++            }
++        }
++    }
++
++    if (g_FinalBytes > 0) {
++        printf("[demo] FINAL abs_us=%llu  RESUME BURST START (%llu bytes)\n",
++               (unsigned long long)GetTimestampUsAbsolute(), (unsigned long long)g_FinalBytes);
++        g_BurstBytes = g_FinalBytes;
++        if (QUIC_FAILED(SendBurst(Stream, TRUE))) {
++            return NULL;
++        }
++    }
++
++    printf("[demo] abs_us=%llu  ALL CYCLES DONE (FIN sent), elapsed=%llums\n",
++           (unsigned long long)GetTimestampUsAbsolute(),
++           (unsigned long long)(GetTimestampMs() - T0));
++
++    return NULL;
++}
++
+ void
+ ClientSend(
+     _In_ HQUIC Connection
+@@ -742,13 +900,7 @@ ClientSend(
+ {
+     QUIC_STATUS Status;
+     HQUIC Stream = NULL;
+-    uint8_t* SendBufferRaw;
+-    QUIC_BUFFER* SendBuffer;
+ 
+-    //
+-    // Create/allocate a new bidirectional stream. The stream is just allocated
+-    // and no QUIC stream identifier is assigned until it's started.
+-    //
+     if (QUIC_FAILED(Status = MsQuic->StreamOpen(Connection, QUIC_STREAM_OPEN_FLAG_NONE, ClientStreamCallback, NULL, &Stream))) {
+         printf("StreamOpen failed, 0x%x!\n", Status);
+         goto Error;
+@@ -756,41 +908,18 @@ ClientSend(
+ 
+     printf("[strm][%p] Starting...\n", Stream);
+ 
+-    //
+-    // Starts the bidirectional stream. By default, the peer is not notified of
+-    // the stream being started until data is sent on the stream.
+-    //
+     if (QUIC_FAILED(Status = MsQuic->StreamStart(Stream, QUIC_STREAM_START_FLAG_NONE))) {
+         printf("StreamStart failed, 0x%x!\n", Status);
+         MsQuic->StreamClose(Stream);
+         goto Error;
+     }
+ 
+-    //
+-    // Allocates and builds the buffer to send over the stream.
+-    //
+-    SendBufferRaw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + SendBufferLength);
+-    if (SendBufferRaw == NULL) {
+-        printf("SendBuffer allocation failed!\n");
+-        Status = QUIC_STATUS_OUT_OF_MEMORY;
+-        goto Error;
+-    }
+-    SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
+-    SendBuffer->Buffer = SendBufferRaw + sizeof(QUIC_BUFFER);
+-    SendBuffer->Length = SendBufferLength;
+-
+-    printf("[strm][%p] Sending data...\n", Stream);
+-
+-    //
+-    // Sends the buffer over the stream. Note the FIN flag is passed along with
+-    // the buffer. This indicates this is the last buffer on the stream and the
+-    // the stream is shut down (in the send direction) immediately after.
+-    //
+-    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
+-        printf("StreamSend failed, 0x%x!\n", Status);
+-        free(SendBufferRaw);
+-        goto Error;
++    {
++        pthread_t Thread;
++        pthread_create(&Thread, NULL, RateLimitedSendThread, (void*)Stream);
++        pthread_detach(Thread);
+     }
++    return;
+ 
+ Error:
+ 
+@@ -827,6 +956,7 @@ ClientConnectionCallback(
+         // The handshake has completed for the connection.
+         //
+         printf("[conn][%p] Connected\n", Connection);
++        g_ClientConnection = Connection;
+         ClientSend(Connection);
+         break;
+     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
+@@ -896,6 +1026,9 @@ ClientLoadConfiguration(
+     Settings.IdleTimeoutMs = IdleTimeoutMs;
+     Settings.IsSet.IdleTimeoutMs = TRUE;
+ 
++    Settings.CongestionControlAlgorithm = QUIC_CONGESTION_CONTROL_ALGORITHM_CUBIC;
++    Settings.IsSet.CongestionControlAlgorithm = TRUE;
++
+     //
+     // Configures a default client configuration, optionally disabling
+     // server certificate validation.
+@@ -946,6 +1079,17 @@ RunClient(
+         return;
+     }
+ 
++    {
++        const char* V;
++        if ((V = GetValue(argc, argv, "burst")) != NULL) { g_BurstBytes = strtoull(V, NULL, 10); }
++        if ((V = GetValue(argc, argv, "pause")) != NULL) { g_PauseMs = (uint32_t)strtoul(V, NULL, 10); }
++        if ((V = GetValue(argc, argv, "cycles")) != NULL) { g_Cycles = (uint32_t)strtoul(V, NULL, 10); }
++        if ((V = GetValue(argc, argv, "prime")) != NULL) { g_PrimeBytes = strtoull(V, NULL, 10); }
++        if ((V = GetValue(argc, argv, "final")) != NULL) { g_FinalBytes = strtoull(V, NULL, 10); }
++    }
++    printf("[demo] burst=%llu bytes, pause=%ums, cycles=%u\n",
++           (unsigned long long)g_BurstBytes, g_PauseMs, g_Cycles);
++
+     QUIC_STATUS Status;
+     const char* ResumptionTicketString = NULL;
+     const char* SslKeyLogFile = getenv(SslKeyLogEnvVar);
+-- 
+2.43.0
+
