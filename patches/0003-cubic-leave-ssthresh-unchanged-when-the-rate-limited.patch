@@ -1,0 +1,99 @@
+From 7c6397cf3cf5c99dd1cfa92d6fdcbd2ea9b1efef Mon Sep 17 00:00:00 2001
+From: Abhirams144 <sureshabhiram92@gmail.com>
+Date: Fri, 6 Nov 2026 23:22:21 +0530
+Subject: [PATCH 3/3] cubic: leave ssthresh unchanged when the rate-limited cap
+ binds
+
+Lowering ssthresh to the capped cwnd kept a rate-limited sender in congestion
+avoidance, but it also turned the cap into a lasting reduction: a sender that
+later became cwnd-limited had to grow from the capped window by congestion
+avoidance instead of slow-starting back to ssthresh (controlled scenario: 9 vs
+23 packets after 15 RTTs for a heartbeat-style sender). The draft does not
+modify ssthresh, so neither do we. cwnd stays bounded by min(ssthresh, 2*maxFS)
+while rate-limited.
+
+The ssthresh-lowering branch never executed in the network experiments, so
+those results are unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/core/cubic.c                | 16 +++++++---------
+ src/core/unittest/CubicTest.cpp | 12 ++++++------
+ 2 files changed, 13 insertions(+), 15 deletions(-)
+
+diff --git a/src/core/cubic.c b/src/core/cubic.c
+index 8d5caff37..e85d38c41 100644
+--- a/src/core/cubic.c
++++ b/src/core/cubic.c
+@@ -759,17 +759,15 @@ CubicCongestionControlOnDataAcknowledged(
+         if (CwndLimit < MinWindow) {
+             CwndLimit = MinWindow;
+         }
++        //
++        // The cap is not a congestion signal, so ssthresh is left alone. If
++        // the congestion avoidance cap lowers cwnd below ssthresh, the next
++        // ACK is processed in slow start under the 2 * maxFS limit; cwnd then
++        // stays bounded by min(ssthresh, 2 * maxFS), and a sender that becomes
++        // cwnd-limited again can slow-start back to ssthresh.
++        //
+         if (Cubic->CongestionWindow > CwndLimit) {
+             Cubic->CongestionWindow = CwndLimit;
+-            if (!InSlowStart && Cubic->SlowStartThreshold > Cubic->CongestionWindow) {
+-                //
+-                // The cap is not a congestion signal: keep the sender in
+-                // congestion avoidance. Otherwise a capped cwnd below ssthresh
+-                // would re-enter slow start on the next ACK and grow by the
+-                // looser 2 * maxFS limit until it hits ssthresh again.
+-                //
+-                Cubic->SlowStartThreshold = Cubic->CongestionWindow;
+-            }
+         }
+     }
+ 
+diff --git a/src/core/unittest/CubicTest.cpp b/src/core/unittest/CubicTest.cpp
+index fe85d90bc..81383a87b 100644
+--- a/src/core/unittest/CubicTest.cpp
++++ b/src/core/unittest/CubicTest.cpp
+@@ -644,7 +644,6 @@ TEST_F(CubicTest, RateLimited_SpuriousCongestionRestoresMaxFs)
+ // Scenario: In congestion avoidance the app keeps only 1-2 packets in flight
+ // while ACKs keep arriving for 3 seconds. CUBIC would grow cwnd well past
+ // maxFS; the draft caps it at maxFS + SMSS (stock MsQuic allowed 2 * maxFS).
+-// The sender also stays in congestion avoidance.
+ //
+ TEST_F(CubicTest, RateLimited_CongestionAvoidanceCapIsMaxFsPlusSmss)
+ {
+@@ -674,7 +673,6 @@ TEST_F(CubicTest, RateLimited_CongestionAvoidanceCapIsMaxFsPlusSmss)
+     ASSERT_EQ(Cubic->BytesInFlightMax, MaxFs);
+     ASSERT_EQ(Cubic->CongestionWindow, MaxFs + Smss);
+     ASSERT_LT(Cubic->CongestionWindow, 2 * MaxFs);
+-    ASSERT_GE(Cubic->CongestionWindow, Cubic->SlowStartThreshold);
+ }
+ 
+ //
+@@ -1245,8 +1243,12 @@ TEST_F(CubicTest, HyStart_ConservativeSlowStartRounds_TransitionToDone)
+             // to HYSTART_DONE and stay there
+             ASSERT_EQ(Cubic->HyStartState, HYSTART_DONE);
+             ASSERT_EQ(Cubic->ConservativeSlowStartRounds, 0u);
+-            // SlowStartThreshold is set to current congestion window when transitioning to DONE
+-            ASSERT_EQ(Cubic->SlowStartThreshold, Cubic->CongestionWindow);
++            // SlowStartThreshold is set to the congestion window when transitioning
++            // to DONE. The app-limited sender (1200 bytes per round) then has its
++            // cwnd capped by the rate-limited increase rules, so cwnd never
++            // exceeds ssthresh nor 2 * maxFS.
++            ASSERT_LE(Cubic->CongestionWindow, Cubic->SlowStartThreshold);
++            ASSERT_LE(Cubic->CongestionWindow, 2 * Cubic->BytesInFlightMax);
+         }
+     }
+ }
+@@ -2174,8 +2176,6 @@ TEST_F(CubicTest, SlowStart_WindowOverflowAfterPersistentCongestion)
+     // sender never had more than maxFS bytes in flight.
+     ASSERT_LE(Cubic->CongestionWindow, ThresholdAfterPC);
+     ASSERT_EQ(Cubic->CongestionWindow, Cubic->BytesInFlightMax + DatagramPayloadLength);
+-    // 3. The cap keeps the sender in congestion avoidance.
+-    ASSERT_EQ(Cubic->SlowStartThreshold, Cubic->CongestionWindow);
+ }
+ 
+ //
+-- 
+2.43.0
+

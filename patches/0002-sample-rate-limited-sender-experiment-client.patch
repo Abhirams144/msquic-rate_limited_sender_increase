@@ -1,7 +1,7 @@
 From 19538311edea77c6d0c6f3d31818fde310f23ac3 Mon Sep 17 00:00:00 2001
 From: Abhirams144 <sureshabhiram92@gmail.com>
 Date: Fri, 6 Nov 2026 23:01:01 +0530
-Subject: [PATCH 2/2] sample: rate-limited sender experiment client
+Subject: [PATCH 2/3] sample: rate-limited sender experiment client
 
 Adds -burst/-pause/-cycles/-prime/-final options so the client can send a
 bulk prime, an application-limited stream and a final resumption burst, prints
