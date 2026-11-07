@@ -1,0 +1,64 @@
+date=2026-11-07T00:48:12+05:30 kernel=7.0.0-42-generic reps=1
+offloads on veth-c1:
+tcp-segmentation-offload: off
+	tx-tcp-segmentation: off
+	tx-tcp-ecn-segmentation: off
+	tx-tcp-mangleid-segmentation: off
+	tx-tcp6-segmentation: off
+	tx-tcp-accecn-segmentation: off
+generic-segmentation-offload: off
+generic-receive-offload: off
+tx-fcoe-segmentation: off [fixed]
+tx-gre-segmentation: on
+tx-gre-csum-segmentation: on
+tx-ipxip4-segmentation: on
+tx-ipxip6-segmentation: on
+tx-udp_tnl-segmentation: on
+tx-udp_tnl-csum-segmentation: on
+tx-tunnel-remcsum-segmentation: off [fixed]
+tx-sctp-segmentation: on
+tx-esp-segmentation: off [fixed]
+tx-udp-segmentation: off
+dur_2s     10mbit   20ms   100   250   none
+dur_5s     10mbit   20ms   100   500   none
+dur_10s    10mbit   20ms   100   1000  none
+dur_20s    10mbit   20ms   100   2000  none
+dur_30s    10mbit   20ms   100   3000  none
+rtt_10     10mbit   5ms    100   1000  none
+rtt_20     10mbit   10ms   100   1000  none
+rtt_80     10mbit   40ms   100   1000  none
+bw_25      25mbit   20ms   100   1000  none
+bw_50      50mbit   20ms   100   1000  none
+compete    25mbit   20ms   100   1000  tcp
+date=2026-11-07T00:50:42+05:30 kernel=7.0.0-42-generic reps=10
+offloads on veth-c1:
+tcp-segmentation-offload: off
+	tx-tcp-segmentation: off
+	tx-tcp-ecn-segmentation: off
+	tx-tcp-mangleid-segmentation: off
+	tx-tcp6-segmentation: off
+	tx-tcp-accecn-segmentation: off
+generic-segmentation-offload: off
+generic-receive-offload: off
+tx-fcoe-segmentation: off [fixed]
+tx-gre-segmentation: on
+tx-gre-csum-segmentation: on
+tx-ipxip4-segmentation: on
+tx-ipxip6-segmentation: on
+tx-udp_tnl-segmentation: on
+tx-udp_tnl-csum-segmentation: on
+tx-tunnel-remcsum-segmentation: off [fixed]
+tx-sctp-segmentation: on
+tx-esp-segmentation: off [fixed]
+tx-udp-segmentation: off
+dur_2s     10mbit   20ms   100   250   none
+dur_5s     10mbit   20ms   100   500   none
+dur_10s    10mbit   20ms   100   1000  none
+dur_20s    10mbit   20ms   100   2000  none
+dur_30s    10mbit   20ms   100   3000  none
+rtt_10     10mbit   5ms    100   1000  none
+rtt_20     10mbit   10ms   100   1000  none
+rtt_80     10mbit   40ms   100   1000  none
+bw_25      25mbit   20ms   100   1000  none
+bw_50      50mbit   20ms   100   1000  none
+compete    25mbit   20ms   100   1000  tcp

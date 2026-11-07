@@ -41,6 +41,7 @@
   xleftmargin=4pt, xrightmargin=4pt, aboveskip=6pt, belowskip=6pt,
   moredelim=[il][\color{addline}]{+}, moredelim=[il][\color{delline}]{-}}
 \lstset{style=c}
+\makeatletter\newcommand{\inputrows}[1]{\@@input #1 }\makeatother
 
 \newcommand{\maxfs}{\ensuremath{\mathit{maxFS}}}
 \newcommand{\cwnd}{\ensuremath{\mathit{cwnd}}}
@@ -69,7 +70,8 @@
 \begin{minipage}{0.85\textwidth}
 \small
 \textbf{Code.} MsQuic branch \texttt{rate-limited-increase}
-(commits \texttt{dd0428a62}, \texttt{19538311e}, \texttt{7c6397cf3}),
+(commits \texttt{dd0428a62}, \texttt{19538311e}, \texttt{7c6397cf3} and the
+upstream bug fix \texttt{1ca13e9d7}),
 on top of upstream \texttt{464c873c0}. Patch files are in
 \texttt{patches/}; experiment scripts in \texttt{experiments/};
 everything needed to rebuild this document and its figures is in \texttt{report/}.
@@ -81,28 +83,27 @@ everything needed to rebuild this document and its figures is in \texttt{report/
 \begin{abstract}
 \noindent
 A \emph{rate-limited} sender is one that is not using its whole congestion
-window: a video player sending one segment every few hundred milliseconds,
-an RPC client, a game, a heartbeat. TCP and QUIC grow the congestion window
-(\cwnd) on every acknowledgement, so a rate-limited sender can keep growing
-\cwnd\ for a long time even though the network never carried that much of
-its data. When the application later has a lot to send, it releases the
-whole inflated window at once, overflowing the bottleneck queue and hurting
-every other flow sharing it.
-The IETF draft \emph{Increase of the Congestion Window when the Sender Is
-Rate-Limited} bounds \cwnd\ by the largest flight the sender actually used
-since the last window reduction, \maxfs.
-MsQuic's CUBIC already had a bound of this kind, but with two gaps: \maxfs\ was
-never reset after a congestion event, and the bound was $2\cdot\maxfs$ in both
-slow start and congestion avoidance.
-We close both gaps (36 lines of code), add four unit tests, and evaluate the
-change in two ways: a deterministic, packet-by-packet scenario harness with an
-\emph{ablation} that disables one change at a time, and a 10\,Mbit/s,
-$\approx$41\,ms dumbbell testbed with a competing flow.
-In the testbed, after 15\,s of rate-limited sending the patch cuts \cwnd\
-at resumption from 324 to 182\,KB, the data lost after resuming from 103 to
-21\,KB, and the worst competing round-trip time from 283 to 199\,ms, while
-the 8\,MB bulk transfer that follows takes the same time (6.84\,s vs
-6.85\,s).
+window: a video player between segments, an RPC client, a game, a heartbeat.
+CUBIC grows the congestion window (\cwnd) with time and on every
+acknowledgement, so a rate-limited sender can keep growing \cwnd\ although the
+network never carried that much of its data. When the application later has a
+lot to send, it releases the whole inflated window at once and overflows the
+bottleneck queue. The IETF draft \emph{Increase of the Congestion Window when the
+Sender Is Rate-Limited} bounds \cwnd\ by the largest flight used since the last
+window reduction, \maxfs. MsQuic's CUBIC had such a bound with two gaps:
+\maxfs\ was never reset, and the bound was $2\cdot\maxfs$ in congestion
+avoidance too. We close both gaps (34 lines of code, four new unit tests) and
+show with a deterministic ablation that each of our five changes matters.
+Evaluating the patch on an emulated bottleneck (420 runs, 11 settings) we also
+found an \emph{upstream bug}: an unsigned underflow in CUBIC's Reno-friendly
+accumulator that makes \cwnd\ grow by one packet per ACK in congestion
+avoidance; we fix it as well. With the bug fixed in both builds, after 28\,s
+of rate-limited sending our change cuts \cwnd\ at resumption from 670 to
+166\,KB and the data lost after resuming from 1094 to 32\,KB, at no cost in
+transfer time; in shorter periods it still cuts losses by 34--63\,\%. The
+patch needs the bug fix: without it, a competing TCP flow can stall. On a
+50\,Mbit/s path with a shallow queue the conservative window costs 23\,\% in
+completion time of the following 8\,MB transfer.
 \end{abstract}
 
 {\small\tableofcontents}
@@ -134,19 +135,21 @@ release the whole window in one round trip. That burst lands in the
 bottleneck queue, the queue overflows, packets of \emph{other} flows are
 dropped and their latency jumps.
 
-Figure~\ref{fig:hook} is the headline result of this project, measured on a
-real network stack (Section~\ref{sec:net}). With stock MsQuic, a competing
-ping that normally sees 43\,ms sees up to 366\,ms in the second after our
-sender resumes; with the patch, it sees at most 194\,ms in the same run,
-and the bulk transfer that caused the burst is not slower.
+Figure~\ref{fig:hook} shows the problem on a real network stack
+(Section~\ref{sec:net}). After a loss, the application sends only about
+25\,KB per round trip for 28\,s. Stock MsQuic's CUBIC keeps growing \cwnd\
+until it hits a limit computed from a flight it last used half a minute
+earlier: 670\,KB, 27 times what is in flight. When the application then has
+8\,MB to send, the whole window leaves at once and about 1.1\,MB is lost.
+The patched sender keeps \cwnd\ at what it has used and loses 24\,KB in
+this run (median over 10 runs: 32\,KB against 1094\,KB).
 
 \begin{figure}[ht]
   \centering
-  \includegraphics[width=\textwidth]{figures/net_ping.pdf}
-  \caption{Latency seen by a competing flow when the rate-limited QUIC sender
-    resumes bulk sending at $t=0$. (a) One run of each build. (b) Cumulative
-    distribution of every ping RTT in the first 3\,s after resuming, pooled
-    over five runs per build. Details in Section~\ref{sec:net}.}
+  \includegraphics[width=\textwidth]{figures/clean_timeline.pdf}
+  \caption{One run of the 28\,s rate-limited setting. The AIMD bug of
+    Section~\ref{sec:bug} is fixed in both builds, which changes nothing in this
+    setting, so the difference is the draft's rule alone. x: loss detected.}
   \label{fig:hook}
 \end{figure}
 
@@ -157,12 +160,14 @@ and the bulk transfer that caused the burst is not slower.
   \item A patch that closes both gaps, made of five small changes C1--C5
         (Section~\ref{sec:impl}), plus four new and two updated unit tests.
   \item A deterministic scenario harness and an ablation study that shows,
-        for \emph{each} change separately, the exact situation in which it
-        matters and what goes wrong without it (Section~\ref{sec:examples}).
-  \item A testbed experiment showing the end-to-end effect on a competing flow
-        (Section~\ref{sec:net}).
-  \item An audit of the earlier exploratory plots in \texttt{experiments/}
-        (Appendix~\ref{app:audit}).
+        for \emph{each} change separately, the situation in which it matters
+        and what goes wrong without it (Section~\ref{sec:examples}).
+  \item The discovery and fix of an upstream bug in MsQuic's CUBIC, the
+        underflow of the Reno-friendly accumulator (Section~\ref{sec:bug}).
+  \item A testbed evaluation with 420 runs: a sweep over the length of the
+        rate-limited period, RTT, bottleneck rate and a competing TCP flow, and a
+        four-build experiment that separates the effect of our change from that
+        of the bug (Section~\ref{sec:net}).
 \end{enumerate}
 
 %======================================================================
@@ -188,8 +193,8 @@ the number of ACKs. As long as ACKs keep arriving, the window follows this
 curve. A rate-limited sender still receives ACKs (for its few packets), so
 the window climbs the cubic curve exactly as if the path had been fully used.
 The longer the rate-limited period, the larger the unvalidated window. In our
-testbed the stock window grew from 170\,KB to 430\,KB during 11\,s in which
-only 29\,KB was ever in flight (Figure~\ref{fig:timeline}).
+testbed the window grew from 150\,KB to 670\,KB during 28\,s in which only
+about 25\,KB was ever in flight (Figure~\ref{fig:hook}).
 
 \subsection{The draft's rules}
 
@@ -227,12 +232,12 @@ evidence in the first place.
 \section{What stock MsQuic does, and the two gaps}
 \label{sec:gaps}
 
-MsQuic's CUBIC (\texttt{src/core/cubic.c}) already tracks \maxfs, in a field
-called \texttt{BytesInFlightMax}. It is updated on every send
+MsQuic's CUBIC (\texttt{src/core/cubic.c}) already tracks \maxfs\ in a
+field called \texttt{BytesInFlightMax}. It is updated on every send
 (\texttt{OnDataSent}) and is used at the end of
 \texttt{OnDataAcknowledged} to cap the window:
 
-\begin{lstlisting}[title={\footnotesize Stock \texttt{cubic.c}, end of \texttt{CubicCongestionControlOnDataAcknowledged}}]
+\begin{lstlisting}[title={\footnotesize Stock \texttt{cubic.c}, end of \texttt{OnDataAcknowledged}}]
     // Using 2 * BytesInFlightMax for the limit allows for exponential growth
     // in the window when not otherwise limited.
     if (Cubic->CongestionWindow > 2 * Cubic->BytesInFlightMax) {
@@ -241,7 +246,8 @@ called \texttt{BytesInFlightMax}. It is updated on every send
 \end{lstlisting}
 
 The field is set to $\cwnd/2$ at initialisation and on reset, and
-otherwise only ever grows. Compared with Table~\ref{tab:rules}:
+otherwise only ever grows. (The draft initialises \maxfs\ to the initial
+window instead; we kept MsQuic's value, see Section~\ref{sec:disc}.) Compared with Table~\ref{tab:rules}:
 
 \begin{description}
   \item[Gap 1: \maxfs\ is never reset (violates R1).] After a loss the window
@@ -274,7 +280,8 @@ packets of 1232\,B.
 \label{tab:worked}
 \begin{tabular}{@{}lccc@{}}
 \toprule
- & \maxfs\ after loss & cap in CA & \cwnd\ after 10\,s at 4 pkt/RTT \\
+ & \maxfs\ after loss & cap in CA & \cwnd\ after 10\,s \\
+ & & & at 4 pkt/RTT \\
 \midrule
 Stock (Gap 1 + Gap 2) & 40 (stale) & $2\cdot 40 = 80$ & \textbf{76.5} \\
 Draft rules & $0\to 28$ (reset, re-measured) & $28 + 1 = 29$ & \textbf{29} \\
@@ -291,8 +298,9 @@ than 4 packets in flight after the loss. When the application resumes, all
 \section{Implementation}
 \label{sec:impl}
 
-The patch touches only \texttt{cubic.c} (+36 lines of code, +29 lines of
-comments) and adds one field to \texttt{cubic.h}. It consists of five changes.
+The patch adds 34 lines of code and 30 lines of comments to \texttt{cubic.c}
+and \texttt{cubic.h} (one new field), not counting the experiment-only trace
+logger of Section~\ref{sec:instr}. It consists of five changes.
 Figure~\ref{fig:hooks} shows where each one sits in the CUBIC callbacks.
 
 \begin{figure}[ht]
@@ -416,13 +424,16 @@ window to stop the oscillation. The ablation (Scenario~B and~D) showed this
 is harmful: \ssthresh\ is the sender's memory of the last \emph{real}
 congestion, and lowering it without any congestion signal makes the sender
 leave slow start early when the application later becomes cwnd-limited.
-In Scenario~D, the sender reached 23 packets after 15 RTTs with \ssthresh\
+In Scenario~D, the sender sent 23 packets in the 15th RTT with \ssthresh\
 untouched and only 9 with it lowered (Figure~\ref{fig:scenD}). The draft
 also does not ask for it. We therefore reverted it (commit
-\texttt{7c6397cf3}). In the testbed runs this branch never fired (\ssthresh\
-only changed at loss events), so the network results hold for both versions.
+\texttt{7c6397cf3}). All network results are for the final version. In the
+testbed the cap pushed \cwnd\ below \ssthresh, where the rejected variant would
+have acted, only in 2 of 10 runs per build of the competing-TCP setting and in
+no run of any other setting.
 
 \subsection{Instrumentation}
+\label{sec:instr}
 
 For the experiments, a CSV logger (\texttt{CUBIC\_CWND\_LOG}) records
 \cwnd, \maxfs, \fs\ and \ssthresh\ at every send, ACK and loss. It is
@@ -476,8 +487,8 @@ scenario in which removing it, and only it, changes the result.
 \label{tab:ablation}
 \begin{tabular}{@{}lccccc@{}}
 \toprule
- & A: burst & C: \cwnd\ on 1st & D: \cwnd\ in & D: \cwnd\ after & E: \maxfs \\
- & on resume & ACK after undo & heartbeat phase & 15 RTTs of bulk & after ECN \\
+ & A: burst & C: \cwnd\ on 1st & D: \cwnd\ in & D: packets sent in & E: \maxfs \\
+ & on resume & ACK after undo & heartbeat phase & 15th RTT of bulk & after ECN \\
 \midrule
 \textcolor{stock}{stock}   & 76 & 29.5 & 25\,861\,B & 25 & 40 \\
 \textcolor{patched}{full}  & 29 & 29.5 & 2\,464\,B  & 23 & 20 \\
@@ -589,8 +600,8 @@ and which costs the sender an extra round trip when it resumes.
 Figure~\ref{fig:scenD}(b) shows the ramp-up when the bulk transfer starts.
 The full patch slow-starts 2, 4, 8, 16 and reaches \ssthresh\ in four rounds,
 then grows in congestion avoidance. The rejected \ssthresh-lowering variant
-has \ssthresh\ at 2 packets and grows by one packet every two rounds:
-9 packets after 15 rounds instead of 23.
+has \ssthresh\ at 2 packets and grows by one packet every two rounds: it
+sends 9 packets in the 15th round instead of 23.
 
 \begin{figure}[ht]
   \centering
@@ -610,7 +621,20 @@ rounds at 4 packets follow.
 to 42 packets in every build. The patched sender then re-measures \maxfs\ from
 the 20 packets still in flight; the stock sender keeps 40. During the
 rate-limited period the stock window keeps climbing the cubic curve to 56.6
-packets; the patched window never exceeds \ssthresh\ (42) and ends at 37.
+packets. The patched window never exceeds \ssthresh\ (42) and ends at 37
+(Figure~\ref{fig:scenE}). It moves between the CA cap and \ssthresh: each time
+the cap drops \cwnd\ below \ssthresh, CUBIC is in slow start again, where the
+draft allows up to $2\cdot\maxfs$. This is the bounded oscillation of
+Section~\ref{sec:design}.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.62\textwidth]{figures/scenario_e.pdf}
+  \caption{Scenario E. After the ECN mark, 20--24 packets stay in flight. Stock
+    grows \cwnd\ along the cubic curve; the patch keeps it between
+    $\maxfs + 1$ packet and \ssthresh.}
+  \label{fig:scenE}
+\end{figure}
 
 \begin{table}[ht]
 \centering
@@ -628,17 +652,88 @@ packets; the patched window never exceeds \ssthresh\ (42) and ends at 37.
 \end{table}
 
 %======================================================================
-\section{Network experiment}
+\section{An upstream bug found by the evaluation}
+\label{sec:bug}
+
+The first testbed campaign (Section~\ref{sec:sweep}) produced one result we
+could not explain with the draft's rules: with a competing TCP flow, the
+patched sender sometimes regrew its window after a loss at slow-start speed
+while in congestion avoidance. The cause is a bug in MsQuic's CUBIC that is
+independent of our patch and still present in upstream \texttt{main}.
+
+\paragraph{Mechanism.} CUBIC keeps a Reno-friendly estimate
+\texttt{AimdWindow} next to the cubic curve and uses
+$\cwnd = \texttt{AimdWindow}$ whenever it is the larger one. The estimate
+grows by one MSS each time an accumulator of ACKed bytes exceeds it:
+
+\begin{lstlisting}[style=diff]
+     if (Cubic->AimdAccumulator > Cubic->AimdWindow) {
+-        Cubic->AimdWindow += DatagramPayloadLength;
+-        Cubic->AimdAccumulator -= Cubic->AimdWindow;    // subtracts the GROWN window
++        Cubic->AimdAccumulator -= Cubic->AimdWindow;    // subtract the window crossed
++        Cubic->AimdWindow += DatagramPayloadLength;
+     }
+\end{lstlisting}
+
+Both fields are \texttt{uint32\_t}. If the accumulator exceeds the window by
+less than one MSS, which is the normal case for ACKs of one or two packets,
+the subtraction wraps to about $4.3\times10^9$. From then on the condition is
+true on every ACK, so \texttt{AimdWindow}, and with it \cwnd, grows by one MSS
+per ACK: exponential growth in congestion avoidance. Congestion events reset
+\texttt{AimdWindow} but not the accumulator, so the effect survives losses.
+MsQuic's own test \texttt{AIMD\_AccumulatorTriggersWindowGrowth} chooses its
+ACK size ``to avoid unsigned underflow in the subtraction'': the underflow
+was known in the test, but not fixed in the code.
+
+\paragraph{Evidence.}
+\begin{itemize}
+  \item \emph{Harness} (scenario F: loss, 10\,s rate-limited, resume, a second
+        loss, then one ACK per packet). Stock MsQuic's accumulator wraps and
+        \cwnd\ \emph{doubles every round} after the loss, from 89\,KB to
+        2.8\,MB in five rounds (Figure~\ref{fig:bugF}). With the fix it grows
+        by about 1\,KB per round, as CUBIC should.
+  \item \emph{Real traces.} The signature of the bug is a congestion-avoidance
+        increase of exactly one SMSS on one ACK. In stock MsQuic 11--33\,\% of
+        all congestion-avoidance increases have it; with the fix, 0--6\,\%
+        (Figure~\ref{fig:fourway}, lower left).
+  \item \emph{Interaction with our patch.} Our cap $\maxfs + \smss$ does not
+        stop this growth on a real network: every ACK lets the sender put one
+        more packet in flight, which raises \maxfs\ and so the cap. Without the
+        fix, our patch therefore still shows the signature in 2--24\,\% of
+        increases.
+\end{itemize}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.62\textwidth]{figures/bug_harness.pdf}
+  \caption{Scenario F, stock MsQuic with and without the accumulator fix. After a
+    loss, with the window fully used and one ACK per packet, the wrapped
+    accumulator makes \cwnd\ double every round trip in congestion avoidance.}
+  \label{fig:bugF}
+\end{figure}
+
+\paragraph{Fix and test.} The two lines are swapped (msquic commit
+\texttt{1ca13e9d7}, \texttt{patches/0004}). A new test,
+\texttt{AIMD\_AccumulatorNoUnderflow}, crosses the window by 50 bytes and
+fails on the old code; two tests that encoded the old order were updated.
+Because the bug inflates stock MsQuic's numbers, we re-ran the key settings
+with four builds to separate its effect from ours (Section~\ref{sec:fourway}).
+
+%======================================================================
+\section{Network evaluation}
 \label{sec:net}
 
-\subsection{Testbed}
+\subsection{Testbed and workload}
 
 Linux network namespaces form a dumbbell (Figure~\ref{fig:topo}). The
-bottleneck is the r1--r2 link, shaped by \texttt{netem} in both directions: 10\,Mbit/s, 20\,ms delay in
-each direction, a 100-packet queue. The measured base RTT is 41\,ms for QUIC
-and 43\,ms for ping; the bandwidth-delay product is about 52\,KB. A second
-client pings a second server through the same bottleneck every 10\,ms to
-measure what our sender does to other traffic.
+bottleneck is the r1--r2 link, shaped by \texttt{netem} in both directions:
+10\,Mbit/s by default, 20\,ms delay each way (base RTT 41\,ms), and a
+100-packet drop-tail queue. Segmentation offloads (GSO, TSO, GRO) are turned
+off on every interface, so the queue limit counts real packets: with UDP GSO
+one queued buffer can hold many packets. A second client sends a ping every
+10\,ms through the same bottleneck; in one setting it also runs a
+long-lived TCP CUBIC flow (\texttt{iperf3}), started 3\,s before the QUIC
+connection.
 
 \begin{figure}[ht]
 \centering
@@ -648,114 +743,174 @@ measure what our sender does to other traffic.
   rtr/.style={draw, circle, minimum size=1.1cm, font=\small, fill=black!4},
   lk/.style={thick}]
   \node[host] (c1) at (0,1.0) {c1\\\scriptsize QUIC client};
-  \node[host] (c2) at (0,-1.0) {c2\\\scriptsize ping};
+  \node[host] (c2) at (0,-1.0) {c2\\\scriptsize ping / TCP};
   \node[rtr]  (r1) at (2.9,0) {r1};
   \node[rtr]  (r2) at (9.3,0) {r2};
   \node[host] (s1) at (12.2,1.0) {s1\\\scriptsize QUIC server};
-  \node[host] (s2) at (12.2,-1.0) {s2\\\scriptsize ping target};
+  \node[host] (s2) at (12.2,-1.0) {s2\\\scriptsize ping / TCP sink};
   \draw[lk] (c1.east) -- (r1); \draw[lk] (c2.east) -- (r1);
   \draw[lk] (r2) -- (s1.west); \draw[lk] (r2) -- (s2.west);
   \draw[stock, line width=2pt] (r1) -- (r2);
   \node[font=\scriptsize, align=center, above=5pt] at (6.1,0) {bottleneck (netem, both directions)};
-  \node[font=\scriptsize, align=center, below=5pt] at (6.1,0) {10 Mbit/s, 20 ms, 100-pkt queue};
+  \node[font=\scriptsize, align=center, below=5pt] at (6.1,0) {10--50 Mbit/s, 5--40 ms each way, 100 packets};
   \draw[-{Stealth}, patched, thick] (1.4,1.75) -- node[above, font=\scriptsize] {QUIC data: prime, rate-limited, resume} (10.8,1.75);
 \end{tikzpicture}
-\caption{Dumbbell topology. The QUIC client uploads to s1; c2's pings share the
-  bottleneck queue.}
+\caption{Dumbbell topology. The QUIC client uploads to s1; c2's ping or TCP
+  flow shares the bottleneck queue.}
 \label{fig:topo}
 \end{figure}
 
-\subsection{Workload}
+One QUIC connection runs three phases: \textbf{prime} (3\,MB as fast as
+possible, so the window grows and meets losses as in normal operation),
+\textbf{rate-limited} (6000\,B every 10\,ms, about 4.8\,Mbit/s, roughly
+25\,KB in flight), and \textbf{resume} (8\,MB as fast as \cwnd\ allows).
+Time~0 is the start of the 8\,MB transfer. We control how long the
+application paces itself (250--3000 bursts, nominally 2.5--30\,s), but at 10\,Mbit/s the first
+$\approx$5\,s of that are spent draining the 3\,MB prime. We therefore report
+the time the sender was \emph{really} rate-limited, measured from its last
+cwnd-limited send (flight $\ge 90\,\%$ of \cwnd) to resumption: 0, 0.7, 6, 17
+and 28\,s for the five pacing lengths, the same in every build.
 
-The sample client runs one connection with three phases:
-\begin{enumerate}
-  \item \textbf{Prime:} 3\,MB bulk, so the window grows and loses packets
-        as in normal operation.
-  \item \textbf{Rate-limited:} 1500 cycles of 6000\,B followed by a 10\,ms pause
-        (about 4.8\,Mbit/s offered, $\approx$15\,s). The flight stays at 29\,KB
-        in both builds.
-  \item \textbf{Resume:} 8\,MB bulk, sent as fast as \cwnd\ allows.
-\end{enumerate}
-Each build is run five times, alternating stock and patched. Time 0 in all
-figures is the moment the 8\,MB transfer starts.
+\paragraph{Campaigns and statistics.}
+\begin{description}
+  \item[Sweep] (Section~\ref{sec:sweep}): 11 settings (length of the
+        rate-limited phase, RTT, bottleneck rate, competing TCP) $\times$ stock
+        and patched $\times$ 10 runs = 220 runs.
+  \item[Four builds] (Section~\ref{sec:fourway}): 5 settings $\times$ 4 builds
+        $\times$ 10 runs = 200 runs. The builds are stock, stock + AIMD fix,
+        ours, and ours + AIMD fix.
+\end{description}
+Runs are interleaved across settings and the build order rotates every
+repetition, so slow drift of the machine cannot favour one build. We report
+medians and quartiles, the difference of medians with a 95\,\% bootstrap
+confidence interval, and a two-sided permutation test (20\,000 permutations).
+All 420 runs completed.
 
-\subsection{Results}
+\subsection{Sweep: stock vs.\ patched across settings}
+\label{sec:sweep}
 
-Figure~\ref{fig:timeline} shows one complete run of each build.
-In the stock run, \maxfs\ (dashed) stays at the 830\,KB peak of the prime
-phase for the whole experiment (Gap~1). During the rate-limited period, with
-29\,KB in flight, \cwnd\ climbs from 170 to 430\,KB, because the cap
-$2\cdot\maxfs = 1.7$\,MB is never reached. At $t = 0$ the sender releases
-that window, the queue overflows and \cwnd\ is cut three times in a row. In
-the patched run, \maxfs\ is re-measured after each loss and \cwnd\ is held
-near 170\,KB during the rate-limited period.
-
-\begin{figure}[ht]
+\begin{figure}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/net_timeline.pdf}
-  \caption{\cwnd, \maxfs\ and bytes in flight for run 1 of each build. The
-    shaded band is the rate-limited phase (only its last 11\,s are shown);
-    the app resumes bulk sending at $t=0$.}
-  \label{fig:timeline}
+  \includegraphics[width=\textwidth]{figures/sweep.pdf}
+  \caption{Sweep campaign: medians (lines) and interquartile ranges (bands) over
+    10 runs per point. Rows vary the length of the rate-limited phase, the RTT and
+    the bottleneck rate; the other two stay at 6\,s, 41\,ms, 10\,Mbit/s. The
+    $x$ axis of the first row is the measured time the sender was rate-limited.}
+  \label{fig:sweep}
 \end{figure}
 
-\begin{table}[ht]
+\begin{table}[t]
 \centering
-\caption{Testbed results, five runs per build: mean and [min--max].}
-\label{tab:net}
-\begin{tabular}{@{}lccc@{}}
+\scriptsize
+\caption{Sweep campaign, median stock / \textbf{patched}. $^{*}$: $p < 0.01$ (permutation test).}
+\label{tab:sweep}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llccccc@{}}
 \toprule
-Metric & \textcolor{stock}{Stock} & \textcolor{patched}{Patched} & Change \\
+Point & Bottleneck, RTT, & \cwnd\ at & lost after & max ping & 8\,MB & $n$ \\
+ & rate-limited for & resume (KB) & resume (KB) & RTT (ms) & time (s) & \\
 \midrule
-Flight during rate-limited phase      & 29\,KB & 29\,KB & --- \\
-\maxfs\ at resumption                 & 849 [832--874]\,KB & 180 [168--199]\,KB & $-79\,\%$ \\
-\cwnd\ at resumption                  & 324 [244--426]\,KB & 182 [169--200]\,KB & $-44\,\%$ \\
-\cwnd\ / flight at resumption         & 11.2$\times$ & 6.3$\times$ & \\
-Peak flight in first 0.5\,s           & 334 [253--436]\,KB & 195 [183--213]\,KB & $-42\,\%$ \\
-Data lost after resuming              & 103 [21--224]\,KB & 21 [7--26]\,KB & $-79\,\%$ \\
-Loss events after resuming            & 22 [9--41] & 10 [3--12] & $-56\,\%$ \\
-Max competing ping RTT (first 3\,s)   & 283 [218--368]\,ms & 199 [186--213]\,ms & $-30\,\%$ \\
-95th-pct.\ ping RTT (first 3\,s)      & 261\,ms & 190\,ms & $-27\,\%$ \\
-Time to send the final 8\,MB          & 6.85\,s & 6.84\,s & none \\
+\inputrows{tables/campaign_rows.tex}
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:net} and Figure~\ref{fig:metrics} summarise all ten runs. The
-patch reduces the window at resumption, the burst, the losses it causes and
-the latency it inflicts on the competing flow, and it does so
-\emph{without} costing throughput: the 8\,MB transfer takes the same time,
-because the patched sender ramps up from a validated window within a few
-round trips, while the stock sender spends the same time recovering from the
-losses its burst caused.
+Figure~\ref{fig:sweep} and Table~\ref{tab:sweep} show three things.
+\begin{itemize}
+  \item \textbf{The harm needs time to build up.} With 0 and 0.7\,s of real
+        rate-limited sending, CUBIC has not had time to grow the window and both
+        builds behave the same. From 6\,s on, stock resumes with 590--760\,KB
+        against 145--260\,KB for the patch, at every RTT and bottleneck rate.
+  \item \textbf{The harm is loss, not delay.} Stock loses 1.1--3.8\,MB after
+        resuming; the patch 31--145\,KB. With a real 100-packet queue the
+        queueing delay is capped at about 120\,ms at 10\,Mbit/s, which both builds
+        reach; the maximum ping RTT therefore differs by only a few
+        milliseconds. (In an earlier, exploratory run with GSO enabled, where
+        the effective queue was longer, the burst raised the competing RTT from
+        43\,ms to a median maximum of 242\,ms with stock and 194\,ms with the
+        patch, and up to 368 and 213\,ms in the worst runs; both builds there
+        still had the accumulator bug.)
+  \item \textbf{No cost in completion time} at 10--25\,Mbit/s: the 8\,MB
+        transfer is as fast or slightly faster with the patch.
+\end{itemize}
+The competing-TCP setting was inconclusive, which led us to the bug in
+Section~\ref{sec:bug}.
 
-The stock results have a wide range for a clear reason: CUBIC's window grows
-with time since the last loss. In stock runs 1--2 the last loss was about
-14\,s before resumption and \cwnd\ reached 426\,KB; in runs 3--5 it was about
-11\,s and \cwnd\ reached 244--276\,KB. The longer an application is
-rate-limited, the worse stock CUBIC behaves. The patched results are tight
-because they depend only on what was actually sent.
+\subsection{Four builds: separating our change from the bug}
+\label{sec:fourway}
 
-\begin{figure}[ht]
+
+
+\begin{figure}[t]
   \centering
-  \includegraphics[width=0.85\textwidth]{figures/net_metrics.pdf}
-  \caption{Per-run results. Bars are means, dots are the individual runs.}
-  \label{fig:metrics}
+  \includegraphics[width=\textwidth]{figures/fourway.pdf}
+  \caption{Four builds, 10 runs each (dots) and medians (bars). Lower left:
+    share of congestion-avoidance increases that are exactly one SMSS on one
+    ACK, the signature of the accumulator bug.}
+  \label{fig:fourway}
 \end{figure}
 
-\paragraph{What did not change.} The total number of bottleneck drops over
-the whole run (460 vs 423) and the number of lost ping packets (27 vs 29)
-are similar, because the prime phase and the 8\,MB transfer dominate them.
-The patch addresses the burst at resumption, not steady-state bulk
-behaviour, which it leaves unchanged.
+\begin{table}[t]
+\centering
+\small
+\caption{Four builds, medians over 10 runs. $p$: our change with the bug fixed in
+  both builds (ours + fix vs.\ stock + fix).}
+\label{tab:fourway}
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+Setting & Metric & Stock & Stock + fix & Ours & Ours + fix & $p$ \\
+\midrule
+\inputrows{tables/fourway_rows.tex}
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fourway_compete.pdf}
+  \caption{Competing TCP flow (25\,Mbit/s). (a) TCP rate around resumption,
+    median of 10 runs; (b) worst 0.5\,s of TCP rate in the 2\,s after resumption;
+    (c) QUIC data lost after resuming. S = stock, O = ours, +f = with AIMD fix.}
+  \label{fig:compete}
+\end{figure}
+
+Table~\ref{tab:fourway}, Figures~\ref{fig:fourway}--\ref{fig:compete} and Figure~\ref{fig:hook} answer
+the question the bug raised.
+\begin{enumerate}
+  \item \textbf{Most of stock's damage at 6\,s comes from the bug.} With the fix,
+        stock resumes with 229 instead of 668\,KB and loses 82 instead of
+        3413\,KB: the wrapped accumulator had pushed \cwnd\ up to the stale
+        $2\cdot\maxfs$ limit in a few seconds.
+  \item \textbf{After long rate-limited periods the draft's rule is what
+        matters.} At 28\,s, the fix changes nothing (670\,KB, 1094\,KB lost):
+        plain CUBIC reaches the stale limit on its own
+        (Figure~\ref{fig:hook}). Our change cuts this to 166\,KB and 32\,KB,
+        and the 8\,MB transfer is about 30\,ms faster.
+  \item \textbf{With the bug fixed in both, our change still helps at every
+        setting}: \cwnd\ at resumption $-17$ to $-28\,\%$ at 6\,s, RTT 80\,ms and
+        50\,Mbit/s, and data lost after resuming $-34$ to $-63\,\%$
+        (all $p < 0.001$).
+  \item \textbf{Our change needs the fix.} With a competing TCP flow, ours
+        without the fix is the worst build for TCP (median 11.0\,Mbit/s in the
+        2\,s after resumption, worst 0.5\,s 6.3\,Mbit/s, three runs where TCP
+        stalls completely for 0.5\,s), because the bug's per-ACK growth passes through
+        the moving cap. Ours + fix is the best: 15.5 and 14.7\,Mbit/s, and the
+        least QUIC data lost (21\,KB vs.\ 47\,KB for stock + fix, $p = 0.06$).
+  \item \textbf{A cost on high-BDP paths with a shallow queue.} At 50\,Mbit/s
+        the resumed burst overflows the 100-packet queue in all builds (first
+        loss after 60\,ms). CUBIC then cuts to 70\,\% of the starting window and
+        grows slowly from there, so starting lower (238 vs.\ 288\,KB) costs
+        throughput: the 8\,MB transfer takes 2.5\,s instead of 2.0\,s and the
+        first MB 52\,ms longer. This is the conservative side of the draft.
+\end{enumerate}
 
 %======================================================================
 \section{Unit tests}
 \label{sec:tests}
 
-All 56 tests of MsQuic's \texttt{CubicTest} suite pass with the patch.
+All 57 tests of MsQuic's \texttt{CubicTest} suite pass with the patches.
 Table~\ref{tab:tests} lists the tests that were added or changed. Each new
-test fails on stock MsQuic.
+test fails without the change it covers.
 
 \begin{table}[ht]
 \centering
@@ -778,9 +933,14 @@ RateLimited\_\-CongestionAvoidance\-CapIsMaxFsPlusSmss & C3 &
   $\cwnd = \maxfs + 1232$. \\
 SlowStart\_\-WindowOverflowAfter\-PersistentCongestion \normalfont(updated) & C3 &
   Previously asserted the old $2\cdot\maxfs$ limit; now asserts
-  $\cwnd = \maxfs + \smss$ (8392\,B). \\
+  $\cwnd = \maxfs + \smss$. \\
 HyStart\_\-ConservativeSlowStart\-Rounds\_TransitionToDone \normalfont(updated) & C3 &
   Asserts $\cwnd \le \ssthresh$ and $\cwnd \le 2\cdot\maxfs$ in slow start. \\
+AIMD\_\-AccumulatorNoUnderflow & fix &
+  The accumulator crosses \texttt{AimdWindow} by 50\,B; it must keep the 50\,B
+  remainder and a further small ACK must not grow the window again. \\
+AIMD\_\-AccumulatorTriggersWindowGrowth, AIMD\_\-SequentialLinearConvergence \normalfont(updated) & fix &
+  Expected values follow the corrected order (subtract, then grow). \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -790,25 +950,43 @@ HyStart\_\-ConservativeSlowStart\-Rounds\_TransitionToDone \normalfont(updated) 
 \label{sec:disc}
 
 \begin{itemize}
-  \item \textbf{Scope.} Only CUBIC is changed. MsQuic's BBR has its own
-        application-limited handling and is not affected.
+  \item \textbf{Ship the bug fix with the patch.} The draft's cap
+        $\maxfs + \smss$ bounds growth \emph{per measured flight}; on a real
+        network the flight grows with every ACK, so a controller that grows by
+        one packet per ACK (the accumulator bug) passes through it. Our patch
+        without the fix was the worst build under competition
+        (Section~\ref{sec:fourway}).
+  \item \textbf{Conservative start on high-BDP paths.} When the resumed burst
+        overflows a shallow queue anyway, a smaller starting window leads to a
+        smaller window after the first loss, which CUBIC grows back slowly. At
+        50\,Mbit/s with a 100-packet queue this cost 23\,\% in completion time of
+        an 8\,MB transfer. Pacing the resumed burst would help both builds.
+  \item \textbf{Loss, not delay.} With a real 100-packet queue the queueing
+        delay is bounded by the queue, so the harm of the stock burst shows as
+        loss (up to 3.8\,MB lost and up to ten times the bottleneck drops) rather than
+        as extra latency for other flows. A longer queue (bufferbloat) would
+        turn it into delay, as our exploratory GSO-enabled run showed.
   \item \textbf{Oscillation.} Without lowering \ssthresh, a rate-limited
         sender's window can move between $\maxfs + \smss$ and
         $\min(\ssthresh, 2\cdot\maxfs)$ (Scenario~B). This is bounded by
         validated values and was the better trade-off
         (Section~\ref{sec:design}).
-  \item \textbf{SMSS.} The cap uses the datagram payload size of path 0.
-        MsQuic's CUBIC uses path 0 for all its window arithmetic, so this is
-        consistent, but it is not multipath-aware.
-  \item \textbf{Testbed.} One emulated path, one competing flow, five runs per
-        build. \texttt{netem}'s queue limit counts socket buffers; with UDP GSO
-        one buffer can hold several packets, so the real queue was probably
-        longer than 100 packets. The absolute delay and loss numbers depend on
-        this detail; the comparison between builds is fair because both ran on
-        the identical setup.
+  \item \textbf{Initial \maxfs.} The draft initialises \maxfs\ to the initial
+        window; MsQuic initialises it to half of it, and we kept that. It only
+        matters before the first window reduction, when it makes the
+        slow-start cap $2\cdot\maxfs$ equal to the initial window until the
+        flight exceeds half of it. Every result here is measured after a
+        reduction, where the draft's reset applies.
+  \item \textbf{Scope.} Only CUBIC is changed; MsQuic's BBR has its own
+        application-limited handling. The cap uses the datagram payload size of
+        path 0, like the rest of MsQuic's CUBIC, so it is not multipath-aware.
+  \item \textbf{Testbed.} One emulated path with a drop-tail queue, one
+        application pattern, at most one competing flow, 10 runs per point. The
+        competing-TCP results are noisier than the others (bimodal outcomes),
+        so differences there have wider intervals.
   \item \textbf{Scenario harness.} The scenarios use idealised whole-round ACKs.
-        They are meant to isolate the logic of each change, not to model a
-        network; the testbed covers that.
+        They isolate the logic of each change; the testbed covers network
+        behaviour.
 \end{itemize}
 
 %======================================================================
@@ -817,20 +995,28 @@ HyStart\_\-ConservativeSlowStart\-Rounds\_TransitionToDone \normalfont(updated) 
 A rate-limited sender should not be allowed to claim capacity it never used.
 Stock MsQuic CUBIC already tried to enforce this, but its limit was based on
 a stale maximum and was twice as loose as the draft allows in congestion
-avoidance. With five small changes (36 lines of code) we implement the rules
-of \texttt{draft-ietf-ccwg-ratelimited-increase-11}. The ablation shows
-that each change is needed and exactly where it matters: C1--C3 stop the
-resumption burst (76 $\to$ 29 packets), C4 keeps the window legal for tiny
-flights, C5 keeps spurious-loss undo working, and leaving \ssthresh\ alone
-keeps ramp-up fast. On a real stack and an emulated bottleneck, the patch
-cuts post-resumption losses by 79\,\% and the worst latency seen by a
-competing flow by 30\,\%, at no cost in transfer time.
+avoidance. With five small changes (34 lines of code) we implement the rules
+of \texttt{draft-ietf-ccwg-ratelimited-increase-11}, and the ablation shows
+where each change matters: C1--C3 stop the resumption burst (76 $\to$ 29
+packets), C4 keeps the window legal for tiny flights, C5 keeps spurious-loss
+undo working, and leaving \ssthresh\ alone keeps ramp-up fast.
+
+The testbed evaluation also exposed an upstream bug, the underflow of CUBIC's
+Reno-friendly accumulator, which inflated stock MsQuic's window and which our
+change cannot contain on its own; we fixed it. With the fix in both builds,
+our change removes the burst after long rate-limited periods (\cwnd\ 670
+$\to$ 166\,KB, data lost 1094 $\to$ 32\,KB after 28\,s, $p < 0.001$), reduces
+losses by 34--63\,\% after shorter ones and, together with the fix, keeps a
+competing TCP flow's worst half-second at 14.7 instead of 6.3\,Mbit/s with
+stock MsQuic. It costs no transfer time except on a high-BDP path with a
+shallow queue.
 
 %======================================================================
 \begin{thebibliography}{9}
-\bibitem{draft} G. Fairhurst, T. Jones, et al.,
+\bibitem{draft} M. Welzl, T. Henderson, G. Fairhurst, M. P. Tahiliani,
   \emph{Increase of the Congestion Window when the Sender Is Rate-Limited},
-  IETF Internet-Draft \texttt{draft-ietf-ccwg-ratelimited-increase-11}.
+  IETF Internet-Draft \texttt{draft-ietf-ccwg-ratelimited-increase-11},
+  September 2026.
 \bibitem{rfc9002} J. Iyengar, I. Swett, \emph{QUIC Loss Detection and
   Congestion Control}, RFC~9002, 2021.
 \bibitem{rfc9438} L. Xu, S. Ha, I. Rhee, V. Goel, L. Eggert, \emph{CUBIC for
@@ -850,8 +1036,16 @@ competing flow by 30\,\%, at no cost in transfer time.
 
 Before this report, a number of exploratory plots had been made in
 \texttt{experiments/}. We checked each against the raw data and the code.
-None of them is used in this report; every figure here was regenerated by
-\texttt{report/make\_figures.py} from the raw traces.
+None of them is used in this report. Every figure here was regenerated from
+the raw traces by three scripts:
+\begin{itemize}
+  \item \path{report/make_figures.py},
+  \item \path{experiments/analyze_campaign.py},
+  \item \path{experiments/analyze_v3.py}.
+\end{itemize}
+The old plots are kept in \path{experiments/old_plots/}. Corrected versions of
+the same ideas are drawn into \path{experiments/graphs/} by
+\path{experiments/make_experiment_graphs.py}.
 
 \begin{table}[H]
 \caption{Verdict on each earlier plot in \texttt{experiments/}.}
@@ -863,7 +1057,7 @@ Plot(s) & Verdict & Reason \\
 \midrule
 \texttt{gap1\_evidence\_clean(\_new)}, \texttt{gap1\_harm\_evidence} &
   correct & Show the stale \maxfs\ correctly, but not its consequence;
-  superseded by Figure~\ref{fig:timeline}. \\
+  superseded by \texttt{graphs/gap1\_before\_after.png}. \\
 \texttt{resumption\_bomb*}, \texttt{bomb\_attempt} &
   invalid & Client and server logs interleaved in one series, producing
   vertical spikes; titles claim a burst the plotted data does not show. \\
@@ -871,7 +1065,7 @@ Plot(s) & Verdict & Reason \\
   invalid & Caps computed from the plot title instead of the data, and from an
   earlier ``+1 byte'' version of the cap; \texttt{gap1\_after} is from a
   superseded build. \\
-\texttt{appendix\_*}, \texttt{worked\_example}, \texttt{rls\_problem} &
+\texttt{appendix\_*}, \texttt{worked\_\-example}, \texttt{rls\_\-problem} &
   incomplete & Slow-start only (miss the CA rule) and mix bytes and packets
   on one axis; one has a 175\,s axis artefact. \\
 \bottomrule
@@ -879,10 +1073,11 @@ Plot(s) & Verdict & Reason \\
 \end{table}
 
 \paragraph{Conventions in the new figures.} One colour per build throughout
-(stock red, patched blue); shared axes where panels are compared; units on
-every axis; the scenario figures in packets of 1232\,B, the testbed figures
-in KB; every network figure states the run it shows or that it pools all
-five; all figures are vector PDFs.
+(stock red, patched blue; lighter shades for the builds with the AIMD fix);
+shared axes where panels are compared; units on every axis; the scenario
+figures in packets of 1232\,B, the testbed figures in KB; every network figure
+states the run it shows or how many runs it summarises; all figures are vector
+PDFs.
 
 \section{Reproducing the results}
 
@@ -894,11 +1089,19 @@ cmake --build build-test --target msquiccoretest
 build-test/bin/Debug/msquiccoretest --gtest_filter='CubicTest.*'
 # ablation (rebuilds cubic.c seven times, restores sources on exit)
 report/ablation/run_ablation.sh
-# testbed (needs root for network namespaces)
-sudo experiments/run_rls_experiments.sh
-python3 experiments/analyze_rls.py
+# harness: accumulator bug (scenario F), stock and stock + fix
+report/ablation/run_f.sh stock > report/ablation/f_stock.txt
+SRC=$PWD/report/ablation/cubic_stock_aimdfix.c \
+  report/ablation/run_f.sh stockfix > report/ablation/f_stockfix.txt
+# testbed campaigns (need root for network namespaces)
+sudo experiments/run_campaign.sh        # sweep, 220 runs
+sudo experiments/run_campaign.sh fix    # four builds, 200 runs
+python3 experiments/analyze_campaign.py
+python3 experiments/analyze_v3.py
+python3 experiments/make_experiment_graphs.py   # experiments/graphs/
 # figures and this document
 python3 report/make_figures.py
+python3 report/make_examples.py      # examples, bug_harness, scenario_e
 cd report && tectonic report.tex
 \end{lstlisting}
 

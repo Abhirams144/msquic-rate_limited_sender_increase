@@ -1,7 +1,7 @@
 From 7c6397cf3cf5c99dd1cfa92d6fdcbd2ea9b1efef Mon Sep 17 00:00:00 2001
 From: Abhirams144 <sureshabhiram92@gmail.com>
 Date: Fri, 6 Nov 2026 23:22:21 +0530
-Subject: [PATCH 3/3] cubic: leave ssthresh unchanged when the rate-limited cap
+Subject: [PATCH 3/4] cubic: leave ssthresh unchanged when the rate-limited cap
  binds
 
 Lowering ssthresh to the capped cwnd kept a rate-limited sender in congestion
