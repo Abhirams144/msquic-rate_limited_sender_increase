@@ -7,6 +7,8 @@
 #   sudo ./run_campaign.sh fix                 # 4-build campaign with the AIMD fix
 #   sudo ./run_campaign.sh acc                 # stock vs stock + AIMD fix, logging
 #                                              # AimdWindow/AimdAccumulator (acc_proof/)
+#   sudo ./run_campaign.sh bulk                # same two builds, plain bulk transfers
+#                                              # (no rate-limited phase)
 #
 # Re-running continues where it stopped: completed runs are skipped.
 #
@@ -38,6 +40,11 @@ elif [ "$MODE" = acc ]; then
     OUT=$EXP/results_v4_acc
     VARIANTS=(accstock accstockfix)
     ONLY="${ONLY:-dur_10s compete}"
+elif [ "$MODE" = bulk ]; then
+    # Does the accumulator bug matter without any rate-limited phase? Same two
+    # builds as "acc"; one plain bulk transfer of CYCLES megabytes per run.
+    OUT=$EXP/results_v5_bulk
+    VARIANTS=(accstock accstockfix)
 else
     OUT=$EXP/results_v2
     VARIANTS=(before after)
@@ -65,6 +72,15 @@ POINTS=(
   "compete    25mbit   20ms   100   1000  tcp"
 )
 # rtt_40 and bw_10 are the same setting as dur_10s and are taken from it.
+if [ "$MODE" = bulk ]; then
+  # name           BW      DELAY  QUEUE  MBYTES  COMPETE
+  POINTS=(
+    "bulk_10       10mbit  20ms   100    30      none"
+    "bulk_rtt80    10mbit  40ms   100    30      none"
+    "bulk_50       50mbit  20ms   100    100     none"
+    "bulk_compete  25mbit  20ms   100    60      tcp"
+  )
+fi
 
 for v in "${VARIANTS[@]}"; do
     [ -x "$ROOT/msquic/${BUILD[$v]}/bin/Release/quicsample" ] || { echo "missing ${BUILD[$v]}"; exit 1; }
@@ -118,7 +134,7 @@ for rep in $(seq 1 "$REPS"); do
     read -r NAME BW DELAY QUEUE CYCLES COMPETE <<< "$p"
     if [ -n "$ONLY" ] && ! [[ " $ONLY " == *" $NAME "* ]]; then continue; fi
     DIR=$OUT/$NAME; mkdir -p "$DIR"
-    echo "bw=$BW delay=$DELAY queue=$QUEUE cycles=$CYCLES compete=$COMPETE" > "$DIR/point.txt"
+    echo "bw=$BW delay=$DELAY queue=$QUEUE cycles=$CYCLES compete=$COMPETE mode=$MODE" > "$DIR/point.txt"
     # rotate the build order every repetition so no build always runs first
     ORDER=""
     for k in $(seq 0 $((NV - 1))); do ORDER="$ORDER ${VARIANTS[$(( (k + rep - 1) % NV ))]}"; done
@@ -130,6 +146,11 @@ for rep in $(seq 1 "$REPS"); do
       echo "[$N/$TOTAL, ${ELAPSED}s] $NAME $TAG"
       set_bottleneck "$BW" "$DELAY" "$QUEUE"
       BIN=$ROOT/msquic/${BUILD[$v]}/bin/Release/quicsample
+      if [ "$MODE" = bulk ]; then
+          CLIENT_ARGS="-prime:0 -cycles:0 -final:$((CYCLES * 1000000))"
+      else
+          CLIENT_ARGS="-prime:3000000 -burst:6000 -pause:10 -cycles:$CYCLES -final:8000000"
+      fi
 
       sleep 1001 | ip netns exec s1 env CWND_LOG="$DIR/${TAG}_server.csv" \
           "$BIN" -server -cert_file:"$CERT" -key_file:"$KEY" > "$DIR/${TAG}_server.out" 2>&1 &
@@ -151,8 +172,7 @@ for rep in $(seq 1 "$REPS"); do
       sleep 0.5
 
       timeout 300 ip netns exec c1 env CWND_LOG="$DIR/${TAG}_client.csv" \
-          "$BIN" -client -unsecure -target:10.0.3.1 -prime:3000000 -burst:6000 -pause:10 \
-          -cycles:"$CYCLES" -final:8000000 > "$DIR/${TAG}_client.out" 2>&1
+          "$BIN" -client -unsecure -target:10.0.3.1 $CLIENT_ARGS > "$DIR/${TAG}_client.out" 2>&1
       echo "client_exit=$?" >> "$DIR/${TAG}_client.out"
 
       sleep 0.5

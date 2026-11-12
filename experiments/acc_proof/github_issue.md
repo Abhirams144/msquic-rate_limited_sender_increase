@@ -17,6 +17,8 @@ Both fields are `uint32_t`. When an ACK takes the accumulator past `AimdWindow` 
 
 The comment above the block says the intent is to "record ACKed bytes in an accumulator until at least a window ... worth of bytes are ACKed, and then increase the window by 1 MTU", i.e. subtract the window that was crossed and then grow it.
 
+The order dates from the CUBIC rewrite in #2269 (586141e1a, January 2022), which grew the window by `Paths[0].Mtu` before subtracting; #2296 changed only the amount added. So it is in every release since v2.0.0.
+
 The existing test `AIMD_AccumulatorTriggersWindowGrowth` sizes its ACK "to avoid unsigned underflow in the subtraction (AimdAccumulator -= AimdWindow)".
 
 ## To reproduce
@@ -57,7 +59,9 @@ A conditional breakpoint on line 661 (`break cubic.c:661 if Cubic->AimdAccumulat
 
 The wrap stays hidden when the window is an exact multiple of the MSS and every ACK adds the same amount, because the next ACK wraps the value back. After a real loss the window is 0.7x the previous one and is rarely such a multiple. On emulated 10-50 Mbit/s paths without competing traffic, 22-33% of congestion-avoidance window increases in our traces were exactly one MSS on a single ACK; with the fix, 0.2-1%.
 
-With `AimdAccumulator` logged on every ACK (two builds that differ only in the two lines below), the accumulator held a wrapped value (>= 2^31) in 10/10 runs per setting on stock code (median 22 and 84 separate wraps per run) and in 0/20 runs with the fix (maximum value 163285). After 6 s of application-limited sending at 10 Mbit/s, the median cwnd at resumption was 668 KB on stock code and 218 KB with the fix, and the median loss after resumption was 3351 KB and 72 KB (10 runs each, permutation p = 0.0001).
+With `AimdAccumulator` logged on every ACK (two builds of 464c873c0 that differ only in the two lines below; its `cubic.c` differs from current `main` only in the active-path lookup), the accumulator held a wrapped value (>= 2^31) in 10/10 runs per setting on stock code (median 22 and 84 separate wraps per run) and in 0/20 runs with the fix (maximum value 163285). After 6 s of application-limited sending at 10 Mbit/s, the median cwnd at resumption was 668 KB on stock code and 218 KB with the fix, and the median loss after resumption was 3351 KB and 72 KB (10 runs each, permutation p = 0.0001).
+
+In plain bulk transfers (no application-limited phase; 10 runs per build at 10 Mbit/s with 40 and 80 ms RTT, 50 Mbit/s, and 25 Mbit/s shared with a TCP CUBIC flow) the wrap occurred 30-515 times per run on stock code, but it is usually undone by the next ACK, because the `uint32` addition wraps the value back. It persisted in 10 of 40 stock runs (0 of 40 with the fix). In all 10 the next ACK covered a single packet while `AimdWindow < WindowPrior`, so only half of it (736 B) was added, less than the shortfall. From then on the accumulator stayed wrapped for 1248-20464 ACKs, and cwnd repeatedly grew by one MSS per ACK until loss. Those runs lost 5-130x more packets than the fixed build. Against the TCP flow, QUIC's median goodput was 16.1 Mbit/s (TCP 7.1) instead of 7.7 (TCP 16.1).
 
 ## Expected behavior
 

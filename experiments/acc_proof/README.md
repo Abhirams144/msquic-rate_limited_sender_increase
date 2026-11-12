@@ -17,4 +17,6 @@ Report: `report/aimd_bug_report.pdf`. Everything here is raw tool output or the 
 | `cubic_S0_stock_logged.c`, `cubic_S1_stockfix_logged.c`, `S0_vs_S1.diff` | Network builds: upstream CUBIC + trace logger (also logs AimdWindow/AimdAccumulator); differ only in the two lines |
 | `build_acc.sh`, `source_*.sha256` | Builds `msquic/build-acc-{stock,stockfix}` from those sources |
 | `analyze_acc.py` | Analyses `sudo experiments/run_campaign.sh acc` (results in `experiments/results_v4_acc/`) |
+| `analyze_bulk.py`, `bulk_runs.csv`, `bulk_summary.csv`, `bulk_groups.csv` | Plain bulk transfers, same two builds (`sudo experiments/run_campaign.sh bulk`, results in `experiments/results_v5_bulk/`): wrap undone by the next ACK in most runs, persistent in 10/40 stock runs, 0/40 fixed |
+| `results_v5_bulk.sha256` | SHA-256 of every raw file in `experiments/results_v5_bulk/` (516 MB, not in git; regenerate with `sudo experiments/run_campaign.sh bulk`) |
 | `github_issue.md` | Draft issue and PR text for microsoft/msquic |

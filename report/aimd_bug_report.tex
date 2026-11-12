@@ -50,7 +50,10 @@ lines fixes it. This report collects the evidence that the bug is real, is in
 \emph{unmodified upstream} MsQuic (\texttt{main} at \texttt{3c9ec01c1},
 10 November 2026), is caused by these two lines alone, and that the fix
 changes nothing else. On an emulated network path, logging the accumulator
-shows a wrap in all 20 upstream runs and in none of the 20 fixed runs. Every claim below is followed by raw output of a tool
+shows a wrap in all 20 upstream runs and in none of the 20 fixed runs. In plain
+bulk transfers without a rate-limited phase the wrap is usually undone by the
+next ACK, but it persisted in 10 of 40 upstream runs (0 of 40 fixed), and those
+runs lost 5--130 times more packets than the fixed build's median. Every claim below is followed by raw output of a tool
 (test runner, debugger, trace) that anyone can regenerate with the commands in
 Section~\ref{sec:repro}.
 \end{abstract}
@@ -103,6 +106,13 @@ the accumulator, so they pass (Section~\ref{sec:gdb}). (3)~Upstream's test
 \texttt{AIMD\_\allowbreak{}Accumulator\allowbreak{}Triggers\allowbreak{}Window\allowbreak{}Growth} chooses its ACK size, in its
 own words, ``to avoid unsigned underflow in the subtraction
 (AimdAccumulator -= AimdWindow)''.
+
+\paragraph{How long it has been there.} \texttt{git blame} on upstream
+\texttt{main} attributes the condition and the subtraction to the CUBIC rewrite
+in PR~\#2269 (\texttt{586141e1a}, January 2022), which already grew the window
+first (by \texttt{Paths[0].Mtu} at the time). PR~\#2296 (\texttt{ba0819664})
+changed only the amount added, to \texttt{DatagramPayloadLength}. The order is
+therefore in every release since v2.0.0; it is not a recent regression.
 
 %======================================================================
 \section{Evidence 1: reproducers on unmodified upstream \texttt{main}}
@@ -250,8 +260,12 @@ the loss & \acc & cwnd (KB) & \acc & cwnd (KB) \\
 %======================================================================
 \section{Evidence 5: effect on a real network path}
 
-\paragraph{Isolation.} These runs use MsQuic \texttt{464c873c0} (the base of
-our project; its AIMD code is identical to today's \texttt{main}). The
+\paragraph{Isolation.} These runs use MsQuic \texttt{464c873c0} (31 August
+2026, the base of our project), not today's \texttt{main}. Between the two,
+\texttt{cubic.c} changed only in how the active path is looked up
+(\texttt{Connection->Paths[0]} became \texttt{QuicPathGetActive(...)}, 12
+places, plus line wrapping); the AIMD code and all window arithmetic are
+identical. The
 ``upstream'' build is that commit's CUBIC. The ``fixed'' build is our ablation
 source with every one of our rate-limited-sender changes compiled out by
 macros, plus the two-line swap. We checked that this configuration is exactly
@@ -299,7 +313,11 @@ Setting & upstream & fixed & upstream & fixed & upstream & fixed \\
 We repeated two settings with builds that log \aw\ and \acc\ on every ACK.
 The two sources differ textually only in the swap
 (\texttt{experiments/acc\_proof/S0\_vs\_S1.diff}) and contain none of our
-rate-limited-sender code. Since \acc\ only ever holds acknowledged bytes
+rate-limited-sender code. Both are upstream \texttt{464c873c0}'s
+\texttt{cubic.c} plus a trace logger, compiled in the same tree. That tree
+also holds our test client (\texttt{sample.c}) and one extra field in
+\texttt{cubic.h} that neither source uses; both are the same for the two
+builds. Since \acc\ only ever holds acknowledged bytes
 (at most a few hundred KB here), a value $\ge 2^{31}$ can only be a wrap; no
 model or threshold tuning is involved.
 
@@ -350,6 +368,77 @@ one packet per ACK; the fixed accumulator never exceeds $1.7\times10^5$.
 \label{fig:accnet}
 \end{figure}
 
+\paragraph{Plain bulk transfers.}\label{sec:bulk}
+Our largest effects come after a rate-limited phase, the scenario of our
+project. To see whether the bug matters without one, we ran the same two
+logging builds on single bulk transfers with no rate-limited phase (10 runs
+per build and setting, build order rotated): 30\,MB at 10\,Mbit/s with 40 and
+80\,ms RTT, 100\,MB at 50\,Mbit/s, and 60\,MB at 25\,Mbit/s shared with a
+TCP CUBIC flow (\texttt{sudo experiments/run\_campaign.sh bulk}).
+
+The wrap happened in all 40 upstream runs and in
+none of the 40 fixed runs (30--515 wraps per upstream run), but in most runs
+it did no harm. A wrapped
+accumulator is undone by the next ACK whenever that ACK adds more than the
+shortfall, which is always less than one packet: the \texttt{uint32} addition
+wraps it back to a small value. With the usual ACK of two packets this always
+happens. The wrap \emph{persists} only if the next ACK adds less than the
+shortfall. That happened in 10 of the 40 upstream runs, and in all 10 the
+cause was the same: a single-packet ACK (1472\,B) while \aw\ was below
+\texttt{WindowPrior}, where the code counts only half of each ACK (736\,B).
+From then on every ACK subtracts the growing window from a value near
+$2^{32}$, so the accumulator stays wrapped for thousands of ACKs (1\,248 to
+20\,464 here), usually until the end of the transfer.
+
+\begin{table}[H]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & \multicolumn{2}{c}{upstream} & fixed & runs with persistent \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-4}
+Setting & wrap persisted & wrap undone & & wrap (upstream vs.\ fixed) \\
+\midrule
+10\,Mbit/s, 40\,ms & --- & 164--180 (10 runs) & 171--182 & 0/10 vs.\ 0/10 \\
+10\,Mbit/s, 80\,ms & \textbf{1\,056--3\,241} (3) & 192--202 (7) & 194--203 & 3/10 vs.\ 0/10 \\
+50\,Mbit/s, 40\,ms & \textbf{582--6\,244} (2) & 114--131 (8) & 114--123 & 2/10 vs.\ 0/10 \\
+25\,Mbit/s + TCP & \textbf{845--10\,935} (5) & 65--98 (5) & 73--100 & 5/10 vs.\ 0/10 \\
+\bottomrule
+\end{tabular}
+\caption{Lost packets per bulk transfer (range over runs; number of runs in
+  brackets). Last column: runs in which the wrap persisted for more than 100
+  ACKs, upstream vs.\ fixed (10/40 vs.\ 0/40 overall, Fisher exact test
+  $p = 0.001$). Upstream runs whose wraps were all undone are
+  indistinguishable from the fixed build in every metric we measured; runs
+  with a persistent wrap lose 5--130$\times$ more packets than the fixed
+  build's median.}
+\label{tab:bulk}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/bulk_network.pdf}
+\caption{Plain bulk transfers. (a) Lost packets in every run; filled diamonds
+  are upstream runs in which the wrap persisted. (b) cwnd at 50\,Mbit/s in the
+  upstream run with the longest wrap and a typical fixed run: once the wrap
+  persists (at about 12\,s), cwnd grows by one packet per ACK until a loss,
+  over and over. (c) Goodput of the QUIC transfer and the competing TCP flow
+  at 25\,Mbit/s, per run; the dotted line is an equal share.}
+\label{fig:bulk}
+\end{figure}
+
+Without competition the link is full either way, so completion time does not
+change (medians within 0.01\,s); what a persistent wrap adds is
+self-inflicted loss and queue overflow at the bottleneck. With a competing TCP
+flow it also changes the split of the link. In the five upstream runs with a
+persistent wrap the QUIC transfer got a median 16.1\,Mbit/s and TCP
+7.1\,Mbit/s; in the fixed runs QUIC got 7.7 and TCP 16.1\,Mbit/s. We note
+honestly that with the fix the QUIC flow gets \emph{less} than half of the
+link against Linux TCP CUBIC. The bug happens to push it the other way, but
+by making it far more aggressive than RFC~9438 allows (one packet per ACK
+instead of 0.5 packet per RTT), not by correcting whatever causes that gap,
+which we have not investigated.
+
 %======================================================================
 \section{Evidence 6: nothing else changes}
 
@@ -398,11 +487,14 @@ old order. Both now expect ``subtract the window that was crossed, then grow''
         from cwnd: 20/20 upstream runs vs.\ 0/20 fixed runs.
   \item \textbf{Natural inputs.} The behavioural reproducer and the network
         runs set no internal state; the bug appears on its own.
-  \item \textbf{Known limitation.} With windows that are exact multiples of
-        the packet size and equal ACK sizes, the wrap is undone by the next ACK
-        and stays invisible. Real windows after a loss are $0.7\times$ the old
-        window and are almost never such multiples, which is why the effect is
-        large on the network.
+  \item \textbf{When the bug is harmless.} A wrap is undone by the next ACK
+        whenever that ACK adds more than the shortfall (less than one
+        packet), which is the normal case in steady bulk transfer. It
+        persists after a single-packet ACK while \acc\ counts half of each
+        ACK (below \texttt{WindowPrior}), which is common when sending is
+        rate-limited or another flow shares the queue, and happened in
+        10 of 40 plain bulk transfers (Section~\ref{sec:bulk}). The effect
+        is therefore all-or-nothing per occurrence, not a small bias.
 \end{itemize}
 
 %======================================================================
@@ -424,6 +516,8 @@ gdb -batch -x ../experiments/acc_proof/catch_wrap.gdb \
 # 3. full core suite: build-test/bin/Debug/msquiccoretest --gtest_brief=1
 # 4. network: experiments/acc_proof/build_acc.sh; sudo experiments/run_campaign.sh acc
 #             python3 experiments/acc_proof/analyze_acc.py
+#    bulk:    sudo experiments/run_campaign.sh bulk
+#             python3 experiments/acc_proof/analyze_bulk.py
 \end{lstlisting}
 
 \end{document}
