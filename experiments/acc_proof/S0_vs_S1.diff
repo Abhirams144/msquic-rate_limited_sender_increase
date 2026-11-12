@@ -1,0 +1,12 @@
+--- cubic_S0_stock_logged.c	2026-11-12 21:54:50.032602612 +0530
++++ cubic_S1_stockfix_logged.c	2026-11-12 21:54:50.032642205 +0530
+@@ -690,8 +690,8 @@
+             Cubic->AimdAccumulator += BytesAcked;
+         }
+         if (Cubic->AimdAccumulator > Cubic->AimdWindow) {
+-            Cubic->AimdWindow += DatagramPayloadLength;
+             Cubic->AimdAccumulator -= Cubic->AimdWindow;
++            Cubic->AimdWindow += DatagramPayloadLength;
+         }
+ 
+         if (Cubic->AimdWindow > CubicWindow) {

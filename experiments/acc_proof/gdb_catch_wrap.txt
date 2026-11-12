@@ -1,0 +1,21 @@
+[==========] Running 1 test from 1 test suite.
+=== underflow 1 at cubic.c:661  AimdAccumulator -= AimdWindow ===
+AimdWindow (already grown on line 660) = 12443
+AimdAccumulator before the subtraction = 11704
+AimdAccumulator after (uint32 result)  = 4294966557
+CongestionWindow                       = 12384
+#0  CubicCongestionControlOnDataAcknowledged (Cc=0x555555f47420, AckEvent=0x7fffffffd210) at src/core/cubic.c:661
+#1  CubicTest_AIMD_PerPacketAcksGrowAtMostOneMssPerWindow_Test::TestBody at src/core/unittest/CubicTest.cpp:2379
+round 0: cwnd 11211 -> 11957, AimdWindow 11211 -> 11211, AimdAccumulator 5544
+round 1: cwnd 11957 -> 12384, AimdWindow 11211 -> 11211, AimdAccumulator 11088
+round 2: cwnd 12384 -> 23531, AimdWindow 11211 -> 23531, AimdAccumulator 4294808370
+src/core/unittest/CubicTest.cpp:2386: Failure
+Expected: (Cubic->AimdWindow - AimdBefore) <= (MaxGrowth), actual: 12320 vs 2464
+round 2
+[  FAILED  ] CubicTest.AIMD_PerPacketAcksGrowAtMostOneMssPerWindow (192 ms)
+[==========] 1 test from 1 test suite ran. (193 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] CubicTest.AIMD_PerPacketAcksGrowAtMostOneMssPerWindow
+ 1 FAILED TEST
+Total underflows: 1

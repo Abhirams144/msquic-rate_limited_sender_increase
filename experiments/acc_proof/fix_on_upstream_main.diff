@@ -1,0 +1,14 @@
+diff --git a/src/core/cubic.c b/src/core/cubic.c
+index 1a5cb6cec..b6c67c6eb 100644
+--- a/src/core/cubic.c
++++ b/src/core/cubic.c
+@@ -657,8 +657,8 @@ CubicCongestionControlOnDataAcknowledged(
+             Cubic->AimdAccumulator += BytesAcked;
+         }
+         if (Cubic->AimdAccumulator > Cubic->AimdWindow) {
+-            Cubic->AimdWindow += DatagramPayloadLength;
+             Cubic->AimdAccumulator -= Cubic->AimdWindow;
++            Cubic->AimdWindow += DatagramPayloadLength;
+         }
+ 
+         if (Cubic->AimdWindow > CubicWindow) {

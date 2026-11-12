@@ -1,0 +1,288 @@
+-- CMAKE Version: 3.28.3
+-- Source Dir: /home/eventhorizon144/WN_ASSIGNMENT/msquic
+-- Host System name: Linux
+-- Setting policy 0091
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- System name: Linux
+-- System version: 7.0.0-42-generic
+-- Platform version: 
+-- Build type: Release
+-- QUIC Platform: linux
+-- Version Build ID: 0
+-- Version Suffix: -private
+-- Looking for _SC_PHYS_PAGES
+-- Looking for _SC_PHYS_PAGES - found
+-- Looking for sysconf
+-- Looking for sysconf - found
+-- Looking for UDP_SEGMENT
+-- Looking for UDP_SEGMENT - found
+-- Looking for SO_ATTACH_REUSEPORT_CBPF
+-- Looking for SO_ATTACH_REUSEPORT_CBPF - found
+-- Looking for sendmmsg
+-- Looking for sendmmsg - found
+-- Enabling quictls/openssl configuration tests
+-- Enabling CA file tests
+-- QUIC_ENABLE_LOGGING is false. Disabling logging
+-- Found libatomic: /usr/lib/x86_64-linux-gnu/libatomic.so.1
+-- Found libnuma: /usr/lib/x86_64-linux-gnu/libnuma.so.1
+-- numa.h not found. If build fails, install libnuma-dev
+-- Enabling shared ephemeral port work around
+-- Configuring for OpenSSL 3.x
+-- Setting openssldir to /usr/lib/ssl
+-- Configuring OpenSSL: /home/eventhorizon144/WN_ASSIGNMENT/msquic/submodules/quictls/config;CC=/usr/bin/cc;CXX=/usr/bin/c++ enable-tls1_3;no-makedepend;no-dgram;no-ssl3;no-psk;no-srp;no-zlib;no-egd;no-idea;no-rc5;no-rc4;no-afalgeng;no-comp;no-cms;no-ct;no-srp;no-srtp;no-ts;no-gost;no-dso;no-ec2m;no-tls1;no-tls1_1;no-tls1_2;no-dtls;no-dtls1;no-dtls1_2;no-ssl;no-ssl3-method;no-tls1-method;no-tls1_1-method;no-tls1_2-method;no-dtls1-method;no-dtls1_2-method;no-siphash;no-whirlpool;no-aria;no-bf;no-blake2;no-sm2;no-sm3;no-sm4;no-camellia;no-cast;no-md4;no-mdc2;no-ocb;no-rc2;no-rmd160;no-scrypt;no-seed;no-weak-ssl-ciphers;no-shared;no-tests;no-uplink;no-cmp;no-fips;no-padlockeng;no-siv;no-legacy;no-dtls;no-deprecated;--libdir=lib;--openssldir="/usr/lib/ssl";--prefix=/home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Configuring for QuicTLS
+-- Configuring done (1.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock
+[  1%] OpenSSL configure
+[  4%] Building C object src/core/CMakeFiles/core.dir/binding.c.o
+[  4%] Building C object src/core/CMakeFiles/core.dir/congestion_control.c.o
+[  7%] Building C object src/core/CMakeFiles/core.dir/connection_pool.c.o
+[  7%] Building C object src/core/CMakeFiles/core.dir/configuration.c.o
+[ 10%] Building C object src/core/CMakeFiles/core.dir/ack_tracker.c.o
+[ 10%] Building C object src/core/CMakeFiles/core.dir/api.c.o
+[ 12%] Building C object src/core/CMakeFiles/core.dir/connection.c.o
+[ 14%] Building C object src/core/CMakeFiles/core.dir/crypto.c.o
+[ 15%] Building C object src/core/CMakeFiles/core.dir/bbr.c.o
+[ 17%] Building C object src/core/CMakeFiles/core.dir/crypto_tls.c.o
+[ 18%] Building C object src/core/CMakeFiles/core.dir/cubic.c.o
+[ 20%] Building C object src/core/CMakeFiles/core.dir/datagram.c.o
+[ 21%] Building C object src/core/CMakeFiles/core.dir/frame.c.o
+[ 23%] Building C object src/core/CMakeFiles/core.dir/partition.c.o
+[ 25%] Building C object src/core/CMakeFiles/core.dir/library.c.o
+[ 26%] Building C object src/core/CMakeFiles/core.dir/listener.c.o
+Configuring OpenSSL version 3.1.7+quic for target linux-x86_64
+Using os-specific seed configuration
+[ 28%] Building C object src/core/CMakeFiles/core.dir/lookup.c.o
+[ 29%] Building C object src/core/CMakeFiles/core.dir/loss_detection.c.o
+[ 31%] Building C object src/core/CMakeFiles/core.dir/mtu_discovery.c.o
+[ 32%] Building C object src/core/CMakeFiles/core.dir/operation.c.o
+[ 34%] Building C object src/core/CMakeFiles/core.dir/packet.c.o
+[ 35%] Building C object src/core/CMakeFiles/core.dir/packet_builder.c.o
+[ 37%] Building C object src/core/CMakeFiles/core.dir/packet_space.c.o
+[ 39%] Building C object src/core/CMakeFiles/core.dir/path.c.o
+[ 40%] Building C object src/core/CMakeFiles/core.dir/range.c.o
+[ 42%] Building C object src/core/CMakeFiles/core.dir/recv_buffer.c.o
+[ 43%] Building C object src/core/CMakeFiles/core.dir/registration.c.o
+[ 45%] Building C object src/core/CMakeFiles/core.dir/send.c.o
+[ 46%] Building C object src/core/CMakeFiles/core.dir/send_buffer.c.o
+[ 48%] Building C object src/core/CMakeFiles/core.dir/sent_packet_metadata.c.o
+[ 50%] Building C object src/core/CMakeFiles/core.dir/settings.c.o
+[ 51%] Building C object src/core/CMakeFiles/core.dir/stream.c.o
+[ 53%] Building C object src/core/CMakeFiles/core.dir/stream_recv.c.o
+[ 54%] Building C object src/core/CMakeFiles/core.dir/stream_set.c.o
+[ 56%] Building C object src/core/CMakeFiles/core.dir/stream_send.c.o
+[ 59%] Building C object src/core/CMakeFiles/core.dir/timer_wheel.c.o
+[ 59%] Building C object src/core/CMakeFiles/core.dir/worker.c.o
+[ 60%] Building C object src/core/CMakeFiles/core.dir/version_neg.c.o
+[ 62%] Building C object src/core/CMakeFiles/core.dir/sliding_window_extremum.c.o
+[ 64%] Linking C static library ../../obj/Release/libcore.a
+[ 64%] Built target core
+Created configdata.pm
+Running configdata.pm
+Created Makefile.in
+Created Makefile
+Created include/openssl/configuration.h
+
+**********************************************************************
+***                                                                ***
+***   OpenSSL has been successfully configured                     ***
+***                                                                ***
+***   If you encounter a problem while building, please open an    ***
+***   issue on GitHub <https://github.com/openssl/openssl/issues>  ***
+***   and include the output from the following command:           ***
+***                                                                ***
+***       perl configdata.pm --dump                                ***
+***                                                                ***
+***   (If you are new to OpenSSL, you might want to consult the    ***
+***   'Troubleshooting' section in the INSTALL.md file first)      ***
+***                                                                ***
+**********************************************************************
+[ 65%] OpenSSL build
+make[4]: warning: -j12 forced in submake: resetting jobserver mode.
+created directory `/home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib'
+*** Installing runtime libraries
+*** Installing development files
+created directory `/home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl'
+install ../../../../../submodules/quictls/include/openssl/aes.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/aes.h
+install ../../../../../submodules/quictls/include/openssl/asn1_mac.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/asn1_mac.h
+install ../../../../../submodules/quictls/include/openssl/asn1err.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/asn1err.h
+install ../../../../../submodules/quictls/include/openssl/async.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/async.h
+install ../../../../../submodules/quictls/include/openssl/asyncerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/asyncerr.h
+install ../../../../../submodules/quictls/include/openssl/bioerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/bioerr.h
+install ../../../../../submodules/quictls/include/openssl/blowfish.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/blowfish.h
+install ../../../../../submodules/quictls/include/openssl/bn.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/bn.h
+install ../../../../../submodules/quictls/include/openssl/bnerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/bnerr.h
+install ../../../../../submodules/quictls/include/openssl/buffer.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/buffer.h
+install ../../../../../submodules/quictls/include/openssl/buffererr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/buffererr.h
+install ../../../../../submodules/quictls/include/openssl/camellia.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/camellia.h
+install ../../../../../submodules/quictls/include/openssl/cast.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cast.h
+install ../../../../../submodules/quictls/include/openssl/cmac.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cmac.h
+install ../../../../../submodules/quictls/include/openssl/cmp_util.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cmp_util.h
+install ../../../../../submodules/quictls/include/openssl/cmperr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cmperr.h
+install ../../../../../submodules/quictls/include/openssl/cmserr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cmserr.h
+install ../../../../../submodules/quictls/include/openssl/comp.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/comp.h
+install ../../../../../submodules/quictls/include/openssl/comperr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/comperr.h
+install ../../../../../submodules/quictls/include/openssl/conf_api.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/conf_api.h
+install ../../../../../submodules/quictls/include/openssl/conferr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/conferr.h
+install ../../../../../submodules/quictls/include/openssl/conftypes.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/conftypes.h
+install ../../../../../submodules/quictls/include/openssl/core.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/core.h
+install ../../../../../submodules/quictls/include/openssl/core_dispatch.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/core_dispatch.h
+install ../../../../../submodules/quictls/include/openssl/core_names.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/core_names.h
+install ../../../../../submodules/quictls/include/openssl/core_object.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/core_object.h
+install ../../../../../submodules/quictls/include/openssl/crmferr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/crmferr.h
+install ../../../../../submodules/quictls/include/openssl/cryptoerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cryptoerr.h
+install ../../../../../submodules/quictls/include/openssl/cryptoerr_legacy.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cryptoerr_legacy.h
+install ../../../../../submodules/quictls/include/openssl/cterr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cterr.h
+install ../../../../../submodules/quictls/include/openssl/decoder.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/decoder.h
+install ../../../../../submodules/quictls/include/openssl/decodererr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/decodererr.h
+install ../../../../../submodules/quictls/include/openssl/des.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/des.h
+install ../../../../../submodules/quictls/include/openssl/dh.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/dh.h
+install ../../../../../submodules/quictls/include/openssl/dherr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/dherr.h
+install ../../../../../submodules/quictls/include/openssl/dsa.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/dsa.h
+install ../../../../../submodules/quictls/include/openssl/dsaerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/dsaerr.h
+install ../../../../../submodules/quictls/include/openssl/dtls1.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/dtls1.h
+install ../../../../../submodules/quictls/include/openssl/e_os2.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/e_os2.h
+install ../../../../../submodules/quictls/include/openssl/ebcdic.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ebcdic.h
+install ../../../../../submodules/quictls/include/openssl/ec.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ec.h
+install ../../../../../submodules/quictls/include/openssl/ecdh.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ecdh.h
+install ../../../../../submodules/quictls/include/openssl/ecdsa.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ecdsa.h
+install ../../../../../submodules/quictls/include/openssl/ecerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ecerr.h
+install ../../../../../submodules/quictls/include/openssl/encoder.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/encoder.h
+install ../../../../../submodules/quictls/include/openssl/encodererr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/encodererr.h
+install ../../../../../submodules/quictls/include/openssl/engine.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/engine.h
+install ../../../../../submodules/quictls/include/openssl/engineerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/engineerr.h
+install ../../../../../submodules/quictls/include/openssl/esserr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/esserr.h
+install ../../../../../submodules/quictls/include/openssl/evp.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/evp.h
+install ../../../../../submodules/quictls/include/openssl/evperr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/evperr.h
+install ../../../../../submodules/quictls/include/openssl/fips_names.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/fips_names.h
+install ../../../../../submodules/quictls/include/openssl/hmac.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/hmac.h
+install ../../../../../submodules/quictls/include/openssl/http.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/http.h
+install ../../../../../submodules/quictls/include/openssl/httperr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/httperr.h
+install ../../../../../submodules/quictls/include/openssl/idea.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/idea.h
+install ../../../../../submodules/quictls/include/openssl/kdf.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/kdf.h
+install ../../../../../submodules/quictls/include/openssl/kdferr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/kdferr.h
+install ../../../../../submodules/quictls/include/openssl/macros.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/macros.h
+install ../../../../../submodules/quictls/include/openssl/md2.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/md2.h
+install ../../../../../submodules/quictls/include/openssl/md4.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/md4.h
+install ../../../../../submodules/quictls/include/openssl/md5.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/md5.h
+install ../../../../../submodules/quictls/include/openssl/mdc2.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/mdc2.h
+install ../../../../../submodules/quictls/include/openssl/modes.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/modes.h
+install ../../../../../submodules/quictls/include/openssl/obj_mac.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/obj_mac.h
+install ../../../../../submodules/quictls/include/openssl/objects.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/objects.h
+install ../../../../../submodules/quictls/include/openssl/objectserr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/objectserr.h
+install ../../../../../submodules/quictls/include/openssl/ocsperr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ocsperr.h
+install ../../../../../submodules/quictls/include/openssl/opensslconf.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/opensslconf.h
+install ../../../../../submodules/quictls/include/openssl/ossl_typ.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ossl_typ.h
+install ../../../../../submodules/quictls/include/openssl/param_build.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/param_build.h
+install ../../../../../submodules/quictls/include/openssl/params.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/params.h
+install ../../../../../submodules/quictls/include/openssl/pem.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pem.h
+install ../../../../../submodules/quictls/include/openssl/pem2.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pem2.h
+install ../../../../../submodules/quictls/include/openssl/pemerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pemerr.h
+install ../../../../../submodules/quictls/include/openssl/pkcs12err.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pkcs12err.h
+install ../../../../../submodules/quictls/include/openssl/pkcs7err.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pkcs7err.h
+install ../../../../../submodules/quictls/include/openssl/prov_ssl.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/prov_ssl.h
+install ../../../../../submodules/quictls/include/openssl/proverr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/proverr.h
+install ../../../../../submodules/quictls/include/openssl/provider.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/provider.h
+install ../../../../../submodules/quictls/include/openssl/quic.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/quic.h
+install ../../../../../submodules/quictls/include/openssl/rand.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/rand.h
+install ../../../../../submodules/quictls/include/openssl/randerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/randerr.h
+install ../../../../../submodules/quictls/include/openssl/rc2.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/rc2.h
+install ../../../../../submodules/quictls/include/openssl/rc4.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/rc4.h
+install ../../../../../submodules/quictls/include/openssl/rc5.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/rc5.h
+install ../../../../../submodules/quictls/include/openssl/ripemd.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ripemd.h
+install ../../../../../submodules/quictls/include/openssl/rsa.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/rsa.h
+install ../../../../../submodules/quictls/include/openssl/rsaerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/rsaerr.h
+install ../../../../../submodules/quictls/include/openssl/seed.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/seed.h
+install ../../../../../submodules/quictls/include/openssl/self_test.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/self_test.h
+install ../../../../../submodules/quictls/include/openssl/sha.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/sha.h
+install ../../../../../submodules/quictls/include/openssl/srtp.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/srtp.h
+install ../../../../../submodules/quictls/include/openssl/ssl2.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ssl2.h
+install ../../../../../submodules/quictls/include/openssl/ssl3.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ssl3.h
+install ../../../../../submodules/quictls/include/openssl/sslerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/sslerr.h
+install ../../../../../submodules/quictls/include/openssl/sslerr_legacy.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/sslerr_legacy.h
+install ../../../../../submodules/quictls/include/openssl/stack.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/stack.h
+install ../../../../../submodules/quictls/include/openssl/store.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/store.h
+install ../../../../../submodules/quictls/include/openssl/storeerr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/storeerr.h
+install ../../../../../submodules/quictls/include/openssl/symhacks.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/symhacks.h
+install ../../../../../submodules/quictls/include/openssl/tls1.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/tls1.h
+install ../../../../../submodules/quictls/include/openssl/trace.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/trace.h
+install ../../../../../submodules/quictls/include/openssl/ts.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ts.h
+install ../../../../../submodules/quictls/include/openssl/tserr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/tserr.h
+install ../../../../../submodules/quictls/include/openssl/txt_db.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/txt_db.h
+install ../../../../../submodules/quictls/include/openssl/types.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/types.h
+install ../../../../../submodules/quictls/include/openssl/uierr.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/uierr.h
+install ../../../../../submodules/quictls/include/openssl/whrlpool.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/whrlpool.h
+install ../../../../../submodules/quictls/include/openssl/x509err.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/x509err.h
+install ../../../../../submodules/quictls/include/openssl/x509v3err.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/x509v3err.h
+install ./include/openssl/asn1.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/asn1.h
+install ./include/openssl/asn1t.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/asn1t.h
+install ./include/openssl/bio.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/bio.h
+install ./include/openssl/cmp.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cmp.h
+install ./include/openssl/cms.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/cms.h
+install ./include/openssl/conf.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/conf.h
+install ./include/openssl/configuration.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/configuration.h
+install ./include/openssl/crmf.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/crmf.h
+install ./include/openssl/crypto.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/crypto.h
+install ./include/openssl/ct.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ct.h
+install ./include/openssl/err.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/err.h
+install ./include/openssl/ess.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ess.h
+install ./include/openssl/fipskey.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/fipskey.h
+install ./include/openssl/lhash.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/lhash.h
+install ./include/openssl/ocsp.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ocsp.h
+install ./include/openssl/opensslv.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/opensslv.h
+install ./include/openssl/pkcs12.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pkcs12.h
+install ./include/openssl/pkcs7.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/pkcs7.h
+install ./include/openssl/safestack.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/safestack.h
+install ./include/openssl/srp.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/srp.h
+install ./include/openssl/ssl.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ssl.h
+install ./include/openssl/ui.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/ui.h
+install ./include/openssl/x509.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/x509.h
+install ./include/openssl/x509_vfy.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/x509_vfy.h
+install ./include/openssl/x509v3.h -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/include/openssl/x509v3.h
+install libcrypto.a -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib/libcrypto.a
+install libssl.a -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib/libssl.a
+created directory `/home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib/pkgconfig'
+install libcrypto.pc -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib/pkgconfig/libcrypto.pc
+install libssl.pc -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib/pkgconfig/libssl.pc
+install openssl.pc -> /home/eventhorizon144/WN_ASSIGNMENT/msquic/build-acc-stock/_deps/opensslquic-build/quictls/lib/pkgconfig/openssl.pc
+[ 65%] Built target OpenSSL_Target
+[ 67%] Building C object src/platform/CMakeFiles/msquic_platform.dir/cgroup.c.o
+[ 70%] Building C object src/platform/CMakeFiles/msquic_platform.dir/datapath_linux.c.o
+[ 70%] Building C object src/platform/CMakeFiles/msquic_platform.dir/crypt.c.o
+[ 71%] Building C object src/platform/CMakeFiles/msquic_platform.dir/pcp.c.o
+[ 73%] Building C object src/platform/CMakeFiles/msquic_platform.dir/platform_worker.c.o
+[ 75%] Building C object src/platform/CMakeFiles/msquic_platform.dir/toeplitz.c.o
+[ 76%] Building C object src/platform/CMakeFiles/msquic_platform.dir/platform_posix.c.o
+[ 78%] Building C object src/platform/CMakeFiles/msquic_platform.dir/datapath_unix.c.o
+[ 79%] Building C object src/platform/CMakeFiles/msquic_platform.dir/hashtable.c.o
+[ 81%] Building C object src/platform/CMakeFiles/msquic_platform.dir/storage_posix.c.o
+[ 82%] Building C object src/platform/CMakeFiles/msquic_platform.dir/datapath_epoll.c.o
+[ 84%] Building C object src/platform/CMakeFiles/msquic_platform.dir/datapath_xplat.c.o
+[ 85%] Building C object src/platform/CMakeFiles/msquic_platform.dir/datapath_raw_dummy.c.o
+[ 87%] Building C object src/platform/CMakeFiles/msquic_platform.dir/tls_quictls.c.o
+[ 89%] Building C object src/platform/CMakeFiles/msquic_platform.dir/crypt_openssl.c.o
+[ 90%] Building C object src/platform/CMakeFiles/msquic_platform.dir/certificates_posix.c.o
+[ 92%] Building C object src/platform/CMakeFiles/msquic_platform.dir/selfsign_openssl.c.o
+[ 93%] Linking C static library ../../obj/Release/libmsquic_platform.a
+[ 93%] Built target msquic_platform
+[ 95%] Building C object src/bin/CMakeFiles/msquic.dir/linux/init.c.o
+[ 96%] Linking C shared library ../../bin/Release/libmsquic.so
+[ 96%] Built target msquic
+[ 98%] Building C object src/tools/sample/CMakeFiles/quicsample.dir/sample.c.o
+[100%] Linking C executable ../../../bin/Release/quicsample
+[100%] Built target quicsample

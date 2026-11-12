@@ -1,0 +1,42 @@
+[==========] Running 52 tests from 1 test suite.
+[ RUN      ] CubicTest.OnEcn_CongestionSignal
+[       OK ] CubicTest.OnEcn_CongestionSignal (0 ms)
+[ RUN      ] CubicTest.CongestionAvoidance_AIMDvsCubicSelection
+[       OK ] CubicTest.CongestionAvoidance_AIMDvsCubicSelection (0 ms)
+[ RUN      ] CubicTest.CongestionAvoidance_RenoFriendlyRegion
+[       OK ] CubicTest.CongestionAvoidance_RenoFriendlyRegion (0 ms)
+[ RUN      ] CubicTest.CongestionAvoidance_BoundedGrowthClamp
+=== underflow 1 at cubic.c:661  AimdAccumulator -= AimdWindow ===
+AimdWindow (already grown on line 660) = 1232
+AimdAccumulator before the subtraction = 1200
+AimdAccumulator after (uint32 result)  = 4294967264
+CongestionWindow                       = 20000
+#0  CubicCongestionControlOnDataAcknowledged (Cc=0x555555f44f70, AckEvent=0x7fffffffd240) at src/core/cubic.c:661
+#1  CubicTest_CongestionAvoidance_BoundedGrowthClamp_Test::TestBody at src/core/unittest/CubicTest.cpp:761
+[       OK ] CubicTest.CongestionAvoidance_BoundedGrowthClamp (1 ms)
+[ RUN      ] CubicTest.SpuriousCongestion_StateRollback
+[       OK ] CubicTest.SpuriousCongestion_StateRollback (0 ms)
+[ RUN      ] CubicTest.HyStart_AnyToDone_ViaPersistentCongestion
+[       OK ] CubicTest.HyStart_AnyToDone_ViaPersistentCongestion (0 ms)
+[ RUN      ] CubicTest.CongestionWindowCalculation
+[       OK ] CubicTest.CongestionWindowCalculation (0 ms)
+[ RUN      ] CubicTest.CongestionControlOnSpuriousCongestionEvent
+[       OK ] CubicTest.CongestionControlOnSpuriousCongestionEvent (0 ms)
+[ RUN      ] CubicTest.Pacing_CongestionAvoidanceEstimation
+[       OK ] CubicTest.Pacing_CongestionAvoidanceEstimation (0 ms)
+[ RUN      ] CubicTest.CongestionAvoidance_TimeGapOverflowProtection
+=== underflow 2 at cubic.c:661  AimdAccumulator -= AimdWindow ===
+AimdWindow (already grown on line 660) = 1232
+AimdAccumulator before the subtraction = 1200
+AimdAccumulator after (uint32 result)  = 4294967264
+CongestionWindow                       = 20000
+#0  CubicCongestionControlOnDataAcknowledged (Cc=0x555555f44f70, AckEvent=0x7fffffffd240) at src/core/cubic.c:661
+#1  CubicTest_CongestionAvoidance_TimeGapOverflowProtection_Test::TestBody at src/core/unittest/CubicTest.cpp:1934
+[       OK ] CubicTest.CongestionAvoidance_TimeGapOverflowProtection (1 ms)
+[ RUN      ] CubicTest.SlowStart_WindowOverflowAfterPersistentCongestion
+[       OK ] CubicTest.SlowStart_WindowOverflowAfterPersistentCongestion (0 ms)
+[ RUN      ] CubicTest.HyStart_SpuriousCongestion_StateNotRolledBack
+[       OK ] CubicTest.HyStart_SpuriousCongestion_StateNotRolledBack (0 ms)
+[==========] 52 tests from 1 test suite ran. (185 ms total)
+[  PASSED  ] 52 tests.
+Total underflows: 2

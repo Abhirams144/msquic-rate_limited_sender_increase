@@ -1,0 +1,29 @@
+Note: Google Test filter = CubicTest.AIMD_*
+[==========] Running 6 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 6 tests from CubicTest
+[ RUN      ] CubicTest.AIMD_SequentialLinearConvergence
+[       OK ] CubicTest.AIMD_SequentialLinearConvergence (0 ms)
+[ RUN      ] CubicTest.AIMD_AccumulatorBelowWindowPrior
+[       OK ] CubicTest.AIMD_AccumulatorBelowWindowPrior (0 ms)
+[ RUN      ] CubicTest.AIMD_AccumulatorAboveWindowPrior
+[       OK ] CubicTest.AIMD_AccumulatorAboveWindowPrior (0 ms)
+[ RUN      ] CubicTest.AIMD_AccumulatorTriggersWindowGrowth
+[       OK ] CubicTest.AIMD_AccumulatorTriggersWindowGrowth (0 ms)
+[ RUN      ] CubicTest.AIMD_AccumulatorNoUnderflow
+[       OK ] CubicTest.AIMD_AccumulatorNoUnderflow (0 ms)
+[ RUN      ] CubicTest.AIMD_PerPacketAcksGrowAtMostOneMssPerWindow
+round 0: cwnd 11211 -> 11957, AimdWindow 11211 -> 11211, AimdAccumulator 5544
+round 1: cwnd 11957 -> 12384, AimdWindow 11211 -> 11211, AimdAccumulator 11088
+round 2: cwnd 12384 -> 12716, AimdWindow 11211 -> 12443, AimdAccumulator 6037
+round 3: cwnd 12716 -> 12985, AimdWindow 12443 -> 12443, AimdAccumulator 12197
+round 4: cwnd 12985 -> 13675, AimdWindow 12443 -> 13675, AimdAccumulator 5914
+round 5: cwnd 13675 -> 13675, AimdWindow 13675 -> 13675, AimdAccumulator 12690
+round 6: cwnd 13675 -> 14907, AimdWindow 13675 -> 14907, AimdAccumulator 5791
+round 7: cwnd 14907 -> 14907, AimdWindow 14907 -> 14907, AimdAccumulator 13183
+[       OK ] CubicTest.AIMD_PerPacketAcksGrowAtMostOneMssPerWindow (0 ms)
+[----------] 6 tests from CubicTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 1 test suite ran. (1 ms total)
+[  PASSED  ] 6 tests.

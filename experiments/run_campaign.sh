@@ -5,6 +5,8 @@
 #   sudo REPS=5 ./run_campaign.sh             # quicker
 #   sudo ONLY="dur_10s rtt_80" ./run_campaign.sh   # a subset of points
 #   sudo ./run_campaign.sh fix                 # 4-build campaign with the AIMD fix
+#   sudo ./run_campaign.sh acc                 # stock vs stock + AIMD fix, logging
+#                                              # AimdWindow/AimdAccumulator (acc_proof/)
 #
 # Re-running continues where it stopped: completed runs are skipped.
 #
@@ -29,12 +31,20 @@ if [ "$MODE" = fix ]; then
     OUT=$EXP/results_v3
     VARIANTS=(stock stockfix ours oursfix)
     ONLY="${ONLY:-dur_10s dur_30s rtt_80 bw_50 compete}"
+elif [ "$MODE" = acc ]; then
+    # Direct evidence for the accumulator bug: two builds whose cubic.c differ
+    # only in the two AIMD lines (experiments/acc_proof/S0_vs_S1.diff); the
+    # trace also records AimdWindow and AimdAccumulator.
+    OUT=$EXP/results_v4_acc
+    VARIANTS=(accstock accstockfix)
+    ONLY="${ONLY:-dur_10s compete}"
 else
     OUT=$EXP/results_v2
     VARIANTS=(before after)
 fi
 declare -A BUILD=([before]=build-before [after]=build-after [stock]=build-before
-                  [stockfix]=build-stockfix [ours]=build-after [oursfix]=build-oursfix)
+                  [stockfix]=build-stockfix [ours]=build-after [oursfix]=build-oursfix
+                  [accstock]=build-acc-stock [accstockfix]=build-acc-stockfix)
 CERT=$ROOT/msquic/build/bin/Release/cert.pem
 KEY=$ROOT/msquic/build/bin/Release/key.pem
 REPS="${REPS:-10}"

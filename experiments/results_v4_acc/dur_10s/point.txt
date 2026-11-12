@@ -1,0 +1,1 @@
+bw=10mbit delay=20ms queue=100 cycles=1000 compete=none

@@ -1,0 +1,5 @@
+point,variant,runs,runs_with_wrap,wrap_events_median,wrapped_acks_median,full_pkt_share_median,cwnd_at_resume_kb,lost_kb_after_resume
+compete,accstock,10,10,84.0,1205.5,0.158,146.084,765.44
+compete,accstockfix,10,0,0.0,0.0,0.036,79.584,31.648
+dur_10s,accstock,10,10,22.0,1688.0,0.323,668.288,3350.509
+dur_10s,accstockfix,10,0,0.0,0.0,0.009,217.618,72.128
