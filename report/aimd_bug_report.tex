@@ -49,7 +49,9 @@ packet: CUBIC behaves like slow start in congestion avoidance. Swapping the two
 lines fixes it. This report collects the evidence that the bug is real, is in
 \emph{unmodified upstream} MsQuic (\texttt{main} at \texttt{3c9ec01c1},
 10 November 2026), is caused by these two lines alone, and that the fix
-changes nothing else. On an emulated network path, logging the accumulator
+changes nothing else. The unit-test and debugger evidence was also re-run
+independently on GitHub's servers, against upstream \texttt{main} cloned
+directly from GitHub. On an emulated network path, logging the accumulator
 shows a wrap in all 20 upstream runs and in none of the 20 fixed runs. In plain
 bulk transfers without a rate-limited phase the wrap is usually undone by the
 next ACK, but it persisted in 10 of 40 upstream runs (0 of 40 fixed), and those
@@ -482,6 +484,17 @@ old order. Both now expect ``subtract the window that was crossed, then grow''
   \item \textbf{Independent tools.} The wrap is reported by gdb reading
         upstream's variables, and by MsQuic's own test runner; our analysis
         scripts are not needed for Evidence 1--4.
+  \item \textbf{Run by a third party.} Evidence 1, 2 and 6 were re-run on
+        GitHub's servers by a GitHub Actions workflow
+        (\texttt{.github/workflows/aimd-proof.yml}). It clones
+        \texttt{microsoft/msquic} directly from GitHub, at \texttt{3c9ec01c1}
+        and at the then-current \texttt{main}, and checks every expected
+        outcome itself: both reproducers fail, gdb catches the wrap in
+        upstream's own tests, the change to \texttt{cubic.c} is exactly one
+        moved line, and with it the reproducers, all CUBIC tests and the full
+        core suite pass. Both jobs succeeded on 12 November 2026; the log and
+        raw outputs are hosted by GitHub, not by us:
+        \url{https://github.com/Abhirams144/msquic-rate_limited_sender_increase/actions/runs/43286985783}.
   \item \textbf{No inference needed.} In the direct-observation run the wrap
         is read from the logged variable itself ($\ge 2^{31}$), not inferred
         from cwnd: 20/20 upstream runs vs.\ 0/20 fixed runs.

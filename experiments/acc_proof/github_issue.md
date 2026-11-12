@@ -63,6 +63,8 @@ With `AimdAccumulator` logged on every ACK (two builds of 464c873c0 that differ 
 
 In plain bulk transfers (no application-limited phase; 10 runs per build at 10 Mbit/s with 40 and 80 ms RTT, 50 Mbit/s, and 25 Mbit/s shared with a TCP CUBIC flow) the wrap occurred 30-515 times per run on stock code, but it is usually undone by the next ACK, because the `uint32` addition wraps the value back. It persisted in 10 of 40 stock runs (0 of 40 with the fix). In all 10 the next ACK covered a single packet while `AimdWindow < WindowPrior`, so only half of it (736 B) was added, less than the shortfall. From then on the accumulator stayed wrapped for 1248-20464 ACKs, and cwnd repeatedly grew by one MSS per ACK until loss. Those runs lost 5-130x more packets than the fixed build. Against the TCP flow, QUIC's median goodput was 16.1 Mbit/s (TCP 7.1) instead of 7.7 (TCP 16.1).
 
+The test, gdb and full-suite steps above also run in a public GitHub Actions workflow that clones this repository at 3c9ec01c1 and at current `main`, checks each expected outcome, and uploads the raw logs: https://github.com/Abhirams144/msquic-rate_limited_sender_increase/actions/runs/43286985783
+
 ## Expected behavior
 
 `AimdWindow` grows by at most one MSS per `AimdWindow` bytes acknowledged: 0.5 MSS/RTT below `WindowPrior` and 1 MSS/RTT above it, as in the code comment and RFC 9438 Section 4.3.
